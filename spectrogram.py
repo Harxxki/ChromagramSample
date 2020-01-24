@@ -1,10 +1,12 @@
 #coding:utf-8
+
+import matplotlib as mpl
 import numpy as np
 import matplotlib.pyplot as plt
-import scikits.audiolab as al
+# import scikits.audiolab as al # 3系非対応😭
 #⚠ wave読み込みにはscikits.audiolab.wavreadがオススメです。
 #私はwaveというパッケージを先に試しましたが,wave.readframesの挙動がおかしかったので使用をやめました。
-
+import soundfile as sf
 import functions as fn
 
 """
@@ -15,7 +17,8 @@ import functions as fn
 # sampling_rate : 大半のwav音源のサンプリングレートは44.1kHzです
 # fmt : フォーマットはだいたいPCMでしょう
 file_path = "audios/harmony1.wav"
-data, sampling_rate, fmt = al.wavread(file_path)
+# data, sampling_rate, fmt = al.wavread(file_path)
+data, sampling_rate = sf.read(file_path)
 
 # ステレオファイルをモノラル化します
 x = fn.monauralize(data)
@@ -38,12 +41,13 @@ time_ruler = np.arange(start, stop, step)
 # 窓関数は周波数解像度が高いハミング窓を用います
 window = np.hamming(NFFT)
 
-spec = np.zeros([len(time_ruler), 1 + (NFFT / 2)]) #転置状態で定義初期化
+# spec = np.zeros([len(time_ruler), 1 + (NFFT / 2)]) #転置状態で定義初期化
+spec = np.zeros([len(time_ruler), int(1 + (NFFT / 2))]) #転置状態で定義初期化
 pos = 0
 
 for fft_index in range(len(time_ruler)):
     # 💥 1.フレームの切り出します
-    frame = x[pos:pos+NFFT]
+    frame = x[int(pos):int(pos+NFFT)]
     # フレームが信号から切り出せない時はアウトです
     if len(frame) == NFFT:
         # 💥 2.窓関数をかけます
@@ -60,10 +64,8 @@ for fft_index in range(len(time_ruler)):
         # これで求められました。あとはspecに格納するだけです
         for i in range(len(spec[fft_index])):
             spec[fft_index][-i-1] = fft_data[i]
-
         # 💥 4. 窓をずらして次のフレームへ
         pos += (NFFT - OVERLAP)
-
 ### プロットします
 # matplotlib.imshowではextentを指定して軸を決められます。aspect="auto"で適切なサイズ比になります
 plt.imshow(spec.T, extent=[0, time_song, 0, sampling_rate/2], aspect="auto")

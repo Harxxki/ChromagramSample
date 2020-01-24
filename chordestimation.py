@@ -2,7 +2,8 @@
 from collections import OrderedDict
 import numpy as np
 import matplotlib.pyplot as plt
-import librosa #インストールしてください!
+import librosa
+import librosa.display
 
 import functions as fn
 
@@ -13,7 +14,7 @@ file_name = "harmony1.wav"
 chroma = fn.librosa_chroma(file_path + file_name)
 
 TONES = 12 # ピッチクラス,音の種類の数
-sampling_rate = 44100 #音源依存
+sampling_rate = 44100 # 音源依存
 
 # "この設定では",こんな感じで時間軸設定を求められます
 # (詳しくはドキュメントを読んで下さい)
@@ -69,9 +70,9 @@ for time_index, time in enumerate(time_ruler):
         maximum = -100000
         this_chord = ""
         # コサイン類似度が最大になるコードを調べます
-        for chord_index, (name, vector) in enumerate(chord_dic.iteritems()):
+        for chord_index, (name, vector) in enumerate(chord_dic.items()):
             similarity = fn.cos_sim(sum_chroma, vector)
-            result[chord_index][nth_chord - 1] = similarity
+            result[chord_index][int(nth_chord - 1)] = similarity
             if similarity > maximum:
                 maximum = similarity
                 this_chord = name
@@ -89,15 +90,15 @@ for time_index, time in enumerate(time_ruler):
 ###
 
 # 最終結果です
-print estimate_chords
+print (estimate_chords)
 
 ###がんばってプロットします
 axis_x = np.arange(0, 16, 2)
 bar_width = 0.07
 colors = ["#ff9999", "#ffaf95","#fabb92","#ffd698","#fae991","#c1fc97","#97fac8","#96f9f5","#98e1fb","#9cb2ff","#b79bfe","#fa96f9", "#b36a6a", "#ab7361","#aa7d61","#ad9165","#b4a765","#8ab66b","#6ab48f","#68b0ad","#689fb3","#6979b0","#7462a3","#aa62a9"]
-for i, (name, vector) in enumerate(chord_dic.iteritems()):
+for i, (name, vector) in enumerate(chord_dic.items()):
     plt.bar(axis_x - ((axis_x[1] - axis_x[0]) * 0.45) + bar_width * i, result[i], color=colors[i], width = bar_width, label = name, align = "center")
 
-plt.legend()
+plt.legend(bbox_to_anchor=(1, 1.05), loc='center', borderaxespad=0)
 plt.xticks(axis_x + bar_width / 24)
 plt.show()
