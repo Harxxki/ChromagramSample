@@ -12,7 +12,8 @@ import librosa
 import librosa.display
 import functions as fn
 import soundfile as sf
-import sys
+from pprint import pprint
+
 
 # 参考:https://qiita.com/yuuki__/items/4bc16ae439de46cd0d76
 class TransToWav:
@@ -73,12 +74,16 @@ class play_music:
         self.play()
 
 
-class BpmAnalyse:
+class  Analyse:
     def __init__(self):
         self.dir_path = tmp.name
         self.file_names = os.listdir(self.dir_path)
         self.file_path = [self.dir_path + "/" + i for i in self.file_names]
         self.bpm = {}
+        self.key = {}
+        self.chroma = np.zeros(12)
+        self.chromaList = {}
+
 
     def analyse_bpm(self):
         for file_name,path in zip(self.file_names,self.file_path):
@@ -95,33 +100,37 @@ class BpmAnalyse:
                 continue
         return self.bpm
 
-class calcChroma:
-    def librosa_chroma(self, file_path, sr):
+    def calc_chroma(self):
+        for file_name,path in zip(self.file_names,self.file_path):
+            if file_name not in self.chromaList:
+                # 曲の1:00~1:30を抜き出す(処理が重い)
+                # TODO: 曲の中心30秒にする
+                self.music, self.sr = librosa.load(path,offset=60.0, duration=30.0)
+                self._bpm, self._beatsPosition = librosa.beat.beat_track(self.music,self.sr)
+                # 楽音成分とパーカッシブ成分に分離
+                harmonic, percussive = librosa.effects.hpss(self.music)
+                # フレームごとのChromaを計算
+                allChroma = librosa.feature.chroma_cens(y=harmonic)
 
-        # 読み込み(sr:サンプリングレート)
-        # 曲の1:00~1:30を抜き出す(処理が重い)
-        # TODO: 曲の中心30秒にする
-        y, sr = librosa.load(file_path, sr=sr,offset=0.0, duration=30.0)
+                # プロット
+                plt.figure(figsize=(12,4))
+                librosa.display.specshow(allChroma, sr=self.sr, x_axis='time', y_axis='chroma', vmin=0, vmax=1)
+                plt.title('Chromagram')
+                plt.colorbar()
+                plt.tight_layout()
+                plt.show()
+                # フレームごとのChromaを1次元12音階に押し込む
+                for i in range(allChroma.shape[0]):
+                    for j in range(allChroma.shape[1]):
+                        self.chroma[i] += allChroma[i][j]
+                self.chromaList[file_name] = self.chroma
+            else:
+                continue
+        return self.chromaList
 
-        # 楽音成分とパーカッシブ成分に分けます
-        y_harmonic, y_percussive = librosa.effects.hpss(y)
+#    def analyse_key(self):
 
-        # クロマグラムを計算します
-        C = librosa.feature.chroma_cens(y=y_harmonic, sr=sr)
-
-        # プロットします
-        plt.figure(figsize=(12,4))
-        librosa.display.specshow(C, sr=sr, x_axis='time', y_axis='chroma', vmin=0, vmax=1)
-        plt.title('Chromagram')
-        plt.colorbar()
-        plt.tight_layout()
-        plt.show()
-
-        return C
-
-### BPMと開始拍位置を求める
-# 参考:https://qiita.com/yuuki__/items/4bc16ae439de46cd0d76
-
+### 前準備
 # path
 path = sys.argv[1]
 # make temp directory
@@ -131,36 +140,26 @@ tmp = temp.TemporaryDirectory()
 save_ = WavSaveTmp(path)
 save_.save_tmp()
 
+### BPMと開始拍位置を求める
+# 参考 : https://qiita.com/yuuki__/items/4bc16ae439de46cd0d76
+
 # bpm analyse
-analyser = BpmAnalyse()
+analyser = Analyse()
 bpm_list = analyser.analyse_bpm()
-
-print(bpm_list)
-
-# clean up temp directory
-tmp.cleanup()
-
+pprint(bpm_list)
 
 ### クロマグラムを求める
-# フレームごとのChromaを求める
-file_name = "落魄フード_inst_BPM132.wav"
-data, sampling_rate = sf.read(path + file_name)
-Chromagram = calcChroma()
-filename = path + file_name
-allChroma = Chromagram.librosa_chroma(filename,sampling_rate)
+# 参考 : https://qiita.com/namaozi/items/31ea255ecc6a04320dfc
 
-# フレームごとのChromaを1次元の12音階に押し込む
-Chroma = np.zeros(12)
-for i in range(allChroma.shape[0]):
-    for j in range(allChroma.shape[1]):
-        Chroma[i] += allChroma[i][j]
+# chroma calc
+chroma_list = analyser.calc_chroma()
+pprint(chroma_list)
 
-### キーを求める
+### 調性を求める
 # スケールのテンプレートベクトル
 # メジャーとマイナーを区別しないダイアトニックスケールのみ(メジャースケールのみの12キー)を考える
 # 順番を保ちたいのでOrderdDict
 # TODO: 効率化
-one_seventh = 1.0/7
 scale_dic = OrderedDict()
 scale = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 for i in range(len(scale)):
@@ -174,17 +173,26 @@ for i in range(len(scale)):
 # Normalize
 Normalizer = np.linalg.norm(Chroma)
 Chroma /= Normalizer
-Normalizer = np.linalg.norm(scale_dic[C])
+Normalizer = np.linalg.norm(scale_dic["C"])
 for i in range(len(scale)):
         scale_dic[scale[i]] /= Normalizer
 
 # Chromaとコサイン類似度が最大になるスケールを調べる
+# TODO : 調を決定せずにコサイン類似度を楽曲間類似度に反映させた方がいい...?
+maximum = -100000
+matchedScale = ""
+# result = np.zeros(12)
 for scale_index, (name, vector) in enumerate(scale_dic.items()):
-    similarity = fn.cos_sim(sum_chroma, vector)
-    result[chord_index][int(nth_chord - 1)] = similarity
+    similarity = fn.cos_sim(Chroma, vector)
+    # result[scale_index] = similarity
     if similarity > maximum:
         maximum = similarity
-        this_chord = name
+        matchedScale = name
+print(name)
 
 
 ### 楽曲間類似度を求め曲順を決定する
+
+### 後処理
+# clean up temp directory
+tmp.cleanup()
