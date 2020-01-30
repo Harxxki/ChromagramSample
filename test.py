@@ -1,3 +1,15 @@
+"""
+
+     * 楽曲間類似度の計算 -> リストを作って再生
+
+Todo:
+
+    * python test.py (オーディオファイルまでの相対パス)
+    * オーディオフォルダの中に正解アノテーションのフォルダを入れる
+    * オーディオの対応形式: mp3,wav(mp3はwavに変換)
+
+"""
+
 #coding:utf-8
 from collections import OrderedDict
 import pydub as dub
@@ -14,6 +26,8 @@ import matplotlib.pyplot as plt
 import tempfile as temp
 import functions as fn
 import soundfile as sf
+from typing import NamedTuple
+import random
 
 # 参考:https://qiita.com/yuuki__/items/4bc16ae439de46cd0d76
 class TransToWav:
@@ -61,16 +75,39 @@ class WavSaveTmp:
             handle_wav.save_wav()
 
 class PlayMusic:
+    """
 
-    def __init__(self):
-        self.wav_name = os.listdir(tmp.name)
-        self.path = [tmp.name + "/" + i for i in self.wav_name]
+     音楽再生クラス
+
+    Attributes:
+        self.wav_name (リスト): tmp直下のwavファイルのリスト.
+        self.path (リスト): tmp直下のwavファイル(絶対パス)のリスト.
+
+    """
+
+    def __init__(self,playList = None):
+        """イニシャライザ
+
+         音楽プレーヤーの初期化
+
+        Args:
+            playList (リスト): 曲名のリスト
+
+        Note:
+            playListを指定しない場合はディレクトリ内の曲をos.listdirで取得した順番で再生
+
+        """
+        if playList is None:
+            self.wav_name = os.listdir(tmp.name)
+            self.playList = [tmp.name + "/" + i for i in self.wav_name]
+        else:
+            self.playList = playList
 
     def play(self):
-        for i in self.path:
-            self.sound = dub.AudioSegment.from_wav(i)
-            print(type(self.sound))
-            play(self.sound)
+        for i in self.playList:
+            self.song = dub.AudioSegment.from_wav(i)
+            print(type(self.song))
+            play(self.song)
         self.play()
 
 class Analyse:
@@ -84,8 +121,7 @@ class Analyse:
         self.chroma = {}
         # スケールのテンプレートベクトル
         # メジャーとマイナーを区別しないダイアトニックスケールのみ(メジャースケールのみの12キー)を考える
-        # 順番を保ちたいのでOrderdDict
-        # TODO: 効率化
+        # 順番を保ちたいのでOrderedDict
         self.scale_dic = OrderedDict()
         self.scale = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
         for i in range(len(self.scale)):
@@ -106,12 +142,17 @@ class Analyse:
                 # 開始拍位置をフレームから秒に変換する
                 self._startBeatPosition = librosa.frames_to_time(self._beatsPosition)
                 # self._bpm = librosa.beat.tempo(onset_env, self.sr)
-                self.bpm[file_name] = (int(self._bpm), self._startBeatPosition[0])
+                self.bpm[file_name] = BPM(self._bpm, self._startBeatPosition[0])
             else:
                 continue
         return self.bpm
 
     def calc_chroma(self):
+        '''
+
+        参考 : https://qiita.com/namaozi/items/31ea255ecc6a04320dfc
+
+        '''
         for file_name,path in zip(self.file_names,self.file_path):
             if file_name not in self.chroma:
                 # 曲の1:00~1:30を抜き出す(処理が重い)
@@ -166,6 +207,93 @@ class Analyse:
                 continue
         return self.key
 
+class Map:
+    """
+
+     楽曲間類似度を算出、保持するクラス
+
+    Attributes:
+        self.songmMap (2次元配列): 曲をノードと見立てた楽曲間距離の隣接行列.
+        self.songList (1次元配列): 再生順に並べられた曲名のリスト.
+        self.keyDist (2次元配列): キー間の相性を距離として格納した隣接距離
+
+    """
+    def __init__(self, songDict, param):
+        """イニシャライザ
+
+         隣接行列の生成
+         最短ハミルトン路の算出、プレイリストの作成
+
+        Args:
+            songDict: 順序付きディクショナリ,[ファイル名 - ((BPM,開始拍位置),Key)]
+            param: パラメーターのタプル,(BPMの重み、Keyの重み)
+
+        Todo:
+            最短ハミルトン路の高速計算を実装する
+
+        """
+        self.songMap = np.empty((len(songDict), len(songDict)))
+        self.keyDist = np.empty((12,12))
+        self.songDict = songDict
+        self.param = param
+        self.songListIndex = np.empty(len(songDict))
+        self.songList = []
+
+    def song_list(self):
+        for i, s1 in enumerate(self.songDict.values()):
+            for j, s2 in enumerate(self.songDict.values()):
+                if i is not j:
+                    self.songMap[i][j] = abs(s1.BPM.BPM - s2.BPM.BPM) / 5
+                    self.songMap[i][j] += 1 - self.key_distance(s1.Key, s2.Key)
+                else :
+                    self.songMap[i][j] = 10000
+
+        for idx, songIdx in enumerate(self.songListIndex):
+            if idx is 0:
+                self.songListIndex[idx] = random.randrange(len(songDict))
+            else:
+                li = []
+                sortedIdxArr = np.argsort(self.songMap[int(self.songListIndex[i-1])])
+                for sortedIdx in sortedIdxArr:
+                    if sortedIdx not in self.songListIndex:
+                        li.append(sortedIdx)
+                self.songListIndex[idx] = random.choice(li)
+                li.clear
+
+        self.songDict_list = []
+
+        for song in self.songDict.keys():
+            self.songDict_list.append(song)
+
+        for songIdx in self.songListIndex:
+            self.songList.append(self.songDict_list[int(songIdx)])
+
+        return self.songList
+
+    def key_distance(self, key1, key2):
+        self.scale = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
+        self.keyDist = [[12, 10, 8, 6, 4, 2, 0, 2, 4, 6, 8, 10],
+                        [10, 12, 10, 8, 6, 4, 2, 0, 2, 4, 6, 8],
+                        [8, 10, 12, 10, 8, 6, 4, 2, 0, 2, 4, 6],
+                        [6, 8, 10, 12, 10, 8, 6, 4, 2, 0, 2, 4],
+                        [4, 6, 8, 10, 12, 10, 8, 6, 4, 2, 0, 2],
+                        [2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 2, 0],
+                        [0, 2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 2],
+                        [2, 0, 2, 4, 6, 8, 10, 12, 10, 8, 6, 4],
+                        [4, 2, 0, 2, 4, 6, 8, 10, 12, 10, 8, 6],
+                        [6, 4, 2, 0, 2, 4, 6, 8, 10, 12, 10, 8],
+                        [8, 6, 4, 2, 0, 2, 4, 6, 8, 10, 12, 10],
+                        [10, 8, 6, 4, 2, 0, 2, 4, 6, 8, 10, 12]]
+        return self.keyDist[self.scale.index(key1)][self.scale.index(key2)] / 12
+
+class BPM(NamedTuple):
+    BPM: np.float64
+    BSP: np.float64
+
+class BPM_n_Key(NamedTuple):
+    BPM: BPM
+    Key: str
+
 def keyTest():
     # [曲名 - (求めたキー,正解のキー,Y/Nラベル)]
     list = {}
@@ -204,37 +332,40 @@ save_.save_tmp()
 # instantiation analyser
 analyser = Analyse()
 
-keyTest()
-
 ### BPMと開始拍位置を求める
 # 参考 : https://qiita.com/yuuki__/items/4bc16ae439de46cd0d76
 # bpm analyse
 bpm_list = analyser.analyse_bpm()
 # print
-pprint(bpm_list)
+# pprint(bpm_list)
+
 
 '''
 ### クロマグラムを求める
-# 参考 : https://qiita.com/namaozi/items/31ea255ecc6a04320dfc
 # chroma calc
 chroma_list = analyser.calc_chroma()
-# Normalize
-pprint(chroma_list)
-for chroma in chroma_list:
-    Normalizer = np.linalg.norm(chroma)
-    chroma /= Normalizer
 # print
 pprint(chroma_list)
+'''
 
 ### 調性を求める
 # 参考 : https://qiita.com/namaozi/items/31ea255ecc6a04320dfc
 # key analyse
 key_list = analyser.analyse_key()
 # print
-pprint(key_list)
-'''
+# pprint(key_list)
 
 ### 楽曲間類似度を求め曲順を決定する
+# [ファイル名 - ((BPM,BSP),Key)]の順序付き辞書
+songDict = OrderedDict()
+for k, tp in bpm_list.items():
+    songDict[k] = BPM_n_Key(tp, key_list[k])
+
+# 楽曲間類似度のマップを作成
+Map = Map(songDict, (1,1))
+
+# 曲順のリストを表示
+pprint(Map.song_list())
 
 ### 曲を再生する
 
