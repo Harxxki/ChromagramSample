@@ -14,6 +14,7 @@ Todo:
 from collections import OrderedDict
 import pydub as dub
 from pydub.playback import play
+from pydub.silence import split_on_silence
 from pprint import pprint
 from glob import glob
 import os
@@ -25,13 +26,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tempfile as temp
 import functions as fn
-import soundfile as sf
 from typing import NamedTuple
 import random
+from tqdm import tqdm
+import datetime
 
-# 参考:https://qiita.com/yuuki__/items/4bc16ae439de46cd0d76
 class TransToWav:
+    '''
 
+    参考: https://qiita.com/yuuki__/items/4bc16ae439de46cd0d76
+
+    '''
     def __init__(self,dir_path,_path):
         self.path = os.path.join(dir_path,_path)
         self.split_path = os.path.splitext(self.path)
@@ -53,7 +58,11 @@ class TransToWav:
                 pass
 
 class WavSaveTmp:
+    '''
 
+    参考: https://qiita.com/yuuki__/items/4bc16ae439de46cd0d76
+
+    '''
     def __init__(self,path):
         self.path = path
         if os.path.isdir(self.path) is True:
@@ -85,23 +94,28 @@ class PlayMusic:
 
     """
 
-    def __init__(self,playList = None):
+    def __init__(self, songDict, playList = None):
         """イニシャライザ
 
          音楽プレーヤーの初期化
 
         Args:
+            songDict (順序つき辞書): [ファイル名 - ((BPM,beats),Key)]
             playList (リスト): 曲名のリスト
 
         Note:
             playListを指定しない場合はディレクトリ内の曲をos.listdirで取得した順番で再生
 
         """
+        self._songDict = songDict
+        self.songDict = OrderedDict()
+        for key in self._songDict:
+            self.songDict[tmp.name + "/" + key] = self._songDict[key]
         if playList is None:
             self.wav_name = os.listdir(tmp.name)
             self.playList = [tmp.name + "/" + i for i in self.wav_name]
         else:
-            self.playList = playList
+            self.playList = [tmp.name + "/" + i for i in playList]
 
     def play(self):
         for i in self.playList:
@@ -109,6 +123,57 @@ class PlayMusic:
             print(type(self.song))
             play(self.song)
         self.play()
+
+    def MIX(self):
+        ### 方針: 適切な長さのサイレンスに楽曲をオーバーレイする (-> 最後に無音部分をカット?)
+        self.silenceDuration = 0
+        for song in self.playList:
+            self.silenceDuration += self.songDict[song].BPM.beats[-8]
+        else:
+            self.silenceDuration += 20
+        self.mixDown = dub.AudioSegment.silent(duration=self.silenceDuration * 1000)
+        # 拍位置を合わせて楽曲をオーバーレイする
+        # エフェクトを適用する(High Pass and Fade in)
+        self.thisSongStartPosition = 0 # 曲の再生開始位置[sec]
+        self.prevSongEndUntilEightBeatPosition = 0 # 曲の最後から8拍目の位置[sec]
+        self.fadeInDuration = 0 # 次の曲のフェードインをかける時間[sec]
+        self.fadeOutDuration = 0 # 曲のフェードアウトをかける時間[sec]
+        self.startPositionDict = {} # 開始位置を記録しておく[sec]
+        for i, song in tqdm(enumerate(self.playList)):
+                self.thisSongEndUntilEightBeatPosition = self.songDict[song].BPM.beats[-8] # 曲の最後から8拍目の位置[sec]
+                self.song_as = dub.AudioSegment.from_wav(song)
+                self.fadeOutDuration = self.songDict[song].BPM.beats[-1] - self.songDict[song].BPM.beats[-8]
+                if i is not 0 and i is not len(self.playList): # フェードアウト、フェードインを適用
+                    self.song_as = self.song_as.fade_in(duration=int(self.fadeInDuration * 1000))
+                elif i is 0: # フェードアウトのみ適用
+                    self.song_as = self.song_as.fade_out(duration=int(self.fadeOutDuration * 1000))
+                elif i is len(self.playList): # フェードインのみ適用
+                    self.song_as = self.song_as.fade_in(duration=int(self.fadeInDuration * 1000))
+                if i is not 0: # 最初の曲のみ0[sec]から再生
+                    self.thisSongStartPosition = self.prevSongEndUntilEightBeatPosition - self.songDict[song].BPM.beats[0]
+                self.mixDown = self.mixDown.overlay(self.song_as, position=self.thisSongStartPosition*1000, loop=False, times=1, gain_during_overlay=0)
+                self.startPositionDict[song] = self.thisSongStartPosition
+                self.prevSongEndUntilEightBeatPosition += (self.songDict[song].BPM.beats[-8] - self.songDict[song].BPM.beats[0])
+                self.fadeInDuration = self.songDict[song].BPM.beats[-1] - self.songDict[song].BPM.beats[-8]
+        else:
+            # ミックスを書き出す
+            print("\nExporting Mix...")
+            # chunks = split_on_silence(self.mixDown, min_silence_len=3000, silence_thresh=-40, keep_silence=500)
+            self._exPath = "/Users/hmori/ChromagramSample3/MixDown"
+            if not os.path.isdir(self._exPath):
+                os.makedirs(self._exPath)
+            # chunks[0].export(self._exPath + "/" + "MixDown😈.mp3", format="mp3")
+            self.mixDown.export(self._exPath + "/" + "MixDown😈.mp3", format="mp3")
+            print("\nSuccessful export!🎉🍺 : " + self._exPath + "/" + "MixDown😈.mp3")
+            # 曲のリスト、再生位置を書き出す
+            print("\n------------------------------- Playlist -------------------------------\n")
+            for index, song in enumerate(self.playList):
+                songname = os.path.splitext(os.path.basename(song))[0]
+                print(str(index+1) + " " + str(songname))
+                td = datetime.timedelta(seconds=round(self.startPositionDict[song]))
+                print("  再生位置 | " + str(td) + "\n")
+            print("------------------------------------------------------------------------\n\n")
+        return
 
 class Analyse:
 
@@ -133,16 +198,21 @@ class Analyse:
                 self.scale_dic[self.scale[i]][(i+10)%12] = 0
 
     def analyse_bpm(self):
-        for file_name,path in zip(self.file_names,self.file_path):
+        '''
+
+        参考 : https://qiita.com/yuuki__/items/4bc16ae439de46cd0d76
+
+        '''
+        for file_name,path in tqdm(zip(self.file_names,self.file_path)):
             if file_name not in self.bpm:
                 self.music, self.sr = librosa.load(path)
                 # self._bpm =  librosa.beat.tempo(self.music,self.sr)
                 # onset_env = librosa.onset.onset_strength(self.music, self.sr)
                 self._bpm, self._beatsPosition = librosa.beat.beat_track(self.music,self.sr)
                 # 開始拍位置をフレームから秒に変換する
-                self._startBeatPosition = librosa.frames_to_time(self._beatsPosition)
+                self.beatsPosition = librosa.frames_to_time(self._beatsPosition)
                 # self._bpm = librosa.beat.tempo(onset_env, self.sr)
-                self.bpm[file_name] = BPM(self._bpm, self._startBeatPosition[0])
+                self.bpm[file_name] = BPM(self._bpm, self.beatsPosition)
             else:
                 continue
         return self.bpm
@@ -182,7 +252,7 @@ class Analyse:
         return self.chroma
 
     def analyse_key(self):
-        for file_name,path in zip(self.file_names,self.file_path):
+        for file_name,path in tqdm(zip(self.file_names,self.file_path)):
             if file_name not in self.chroma:
                 self.music, self.sr = librosa.load(path,offset=60.0, duration=30.0)
                 harmonic, percussive = librosa.effects.hpss(self.music)
@@ -215,7 +285,7 @@ class Map:
     Attributes:
         self.songmMap (2次元配列): 曲をノードと見立てた楽曲間距離の隣接行列.
         self.songList (1次元配列): 再生順に並べられた曲名のリスト.
-        self.keyDist (2次元配列): キー間の相性を距離として格納した隣接距離
+        self.keyDist (2次元配列): キー間の相性を距離として格納した隣接距離.
 
     """
     def __init__(self, songDict, param):
@@ -225,7 +295,7 @@ class Map:
          最短ハミルトン路の算出、プレイリストの作成
 
         Args:
-            songDict: 順序付きディクショナリ,[ファイル名 - ((BPM,開始拍位置),Key)]
+            songDict: 順序付きディクショナリ,[ファイル名 - ((BPM,beats),Key)]
             param: パラメーターのタプル,(BPMの重み、Keyの重み)
 
         Todo:
@@ -237,9 +307,9 @@ class Map:
         self.songDict = songDict
         self.param = param
         self.songListIndex = np.empty(len(songDict))
-        self.songList = []
+        self.playList = []
 
-    def song_list(self):
+    def play_list(self):
         for i, s1 in enumerate(self.songDict.values()):
             for j, s2 in enumerate(self.songDict.values()):
                 if i is not j:
@@ -250,14 +320,15 @@ class Map:
 
         for idx, songIdx in enumerate(self.songListIndex):
             if idx is 0:
-                self.songListIndex[idx] = random.randrange(len(songDict))
+                self.songListIndex[idx] = random.randrange(len(self.songDict))
             else:
                 li = []
                 sortedIdxArr = np.argsort(self.songMap[int(self.songListIndex[i-1])])
                 for sortedIdx in sortedIdxArr:
                     if sortedIdx not in self.songListIndex:
                         li.append(sortedIdx)
-                self.songListIndex[idx] = random.choice(li)
+                if len(li) is not 0:
+                    self.songListIndex[idx] = random.choice(li)
                 li.clear
 
         self.songDict_list = []
@@ -266,9 +337,9 @@ class Map:
             self.songDict_list.append(song)
 
         for songIdx in self.songListIndex:
-            self.songList.append(self.songDict_list[int(songIdx)])
+            self.playList.append(self.songDict_list[int(songIdx)])
 
-        return self.songList
+        return self.playList
 
     def key_distance(self, key1, key2):
         self.scale = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
@@ -288,7 +359,7 @@ class Map:
 
 class BPM(NamedTuple):
     BPM: np.float64
-    BSP: np.float64
+    beats: np.ndarray
 
 class BPM_n_Key(NamedTuple):
     BPM: BPM
@@ -318,13 +389,11 @@ def keyTest():
         list["song"+str(i)] = list.pop(song_name)
     pprint(list)
 
-### 前準備
+print("\n\nConversioning to wav file...")
 # path
-# audios/GiantSteps+\ EDM\ Key\ Dataset/sample/audio
 path = sys.argv[1]
 # make temp directory
 tmp = temp.TemporaryDirectory()
-
 # mp3,wav save to temp file
 save_ = WavSaveTmp(path)
 save_.save_tmp()
@@ -332,43 +401,32 @@ save_.save_tmp()
 # instantiation analyser
 analyser = Analyse()
 
-### BPMと開始拍位置を求める
-# 参考 : https://qiita.com/yuuki__/items/4bc16ae439de46cd0d76
 # bpm analyse
+print("\nAnalyzing BPM...")
 bpm_list = analyser.analyse_bpm()
-# print
-# pprint(bpm_list)
 
-
-'''
-### クロマグラムを求める
-# chroma calc
-chroma_list = analyser.calc_chroma()
-# print
-pprint(chroma_list)
-'''
-
-### 調性を求める
-# 参考 : https://qiita.com/namaozi/items/31ea255ecc6a04320dfc
 # key analyse
+print("\nAnalyzing Key...")
 key_list = analyser.analyse_key()
-# print
-# pprint(key_list)
 
-### 楽曲間類似度を求め曲順を決定する
-# [ファイル名 - ((BPM,BSP),Key)]の順序付き辞書
-songDict = OrderedDict()
+# song_dict: [ファイル名 - ((BPM,beats),Key)]の順序付き辞書
+song_dict = OrderedDict()
 for k, tp in bpm_list.items():
-    songDict[k] = BPM_n_Key(tp, key_list[k])
+    song_dict[k] = BPM_n_Key(tp, key_list[k])
 
 # 楽曲間類似度のマップを作成
-Map = Map(songDict, (1,1))
+print("\nAnalyzing song-song similarity...")
+Map = Map(song_dict, (1,1))
 
 # 曲順のリストを表示
-pprint(Map.song_list())
+print("\nDetermining playback order...")
+play_list = Map.play_list()
 
-### 曲を再生する
+# instantiation player
+player = PlayMusic(song_dict,play_list)
+# MIXを作成
+print("\nCreating Mix...")
+player.MIX()
 
-### 後処理
 # clean up temp directory
 tmp.cleanup()
