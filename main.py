@@ -135,26 +135,31 @@ class PlayMusic:
         # 拍位置を合わせて楽曲をオーバーレイする
         # エフェクトを適用する(High Pass and Fade in)
         self.thisSongStartPosition = 0 # 曲の再生開始位置[sec]
-        self.prevSongEndUntilEightBeatPosition = 0 # 曲の最後から8拍目の位置[sec]
+        # self.prevSongEndUntilEightBeatPosition = 0 # 曲の最後から8拍目の位置[sec]
+        self.prevSongEndBeatPosition = 0 # 曲の終了拍位置[sec]
         self.fadeInDuration = 0 # 次の曲のフェードインをかける時間[sec]
         self.fadeOutDuration = 0 # 曲のフェードアウトをかける時間[sec]
         self.startPositionDict = {} # 開始位置を記録しておく[sec]
         for i, song in tqdm(enumerate(self.playList)):
-                self.thisSongEndUntilEightBeatPosition = self.songDict[song].BPM.beats[-8] # 曲の最後から8拍目の位置[sec]
+                # self.prevSongEndBeatPosition = self.songDict[song].BPM.beats[-1] # 曲の終了拍位置[sec]
                 self.song_as = dub.AudioSegment.from_wav(song)
-                self.fadeOutDuration = self.songDict[song].BPM.beats[-1] - self.songDict[song].BPM.beats[-8]
-                if i is not 0 and i is not len(self.playList): # フェードアウト、フェードインを適用
+                self.time = self.song_as.duration_seconds # 再生時間[sec]
+                self.fadeOutDuration = self.time - self.songDict[song].BPM.beats[-8]
+                self.fadeInDuration = self.songDict[song].BPM.beats[7]
+                if i is not 0 and i is not len(self.playList)-1: # フェードアウト、フェードインを適用
                     self.song_as = self.song_as.fade_in(duration=int(self.fadeInDuration * 1000))
+                    self.song_as = self.song_as.fade_out(duration=int(self.fadeOutDuration * 1000))
                 elif i is 0: # フェードアウトのみ適用
                     self.song_as = self.song_as.fade_out(duration=int(self.fadeOutDuration * 1000))
-                elif i is len(self.playList): # フェードインのみ適用
+                elif i is len(self.playList)-1: # フェードインのみ適用
                     self.song_as = self.song_as.fade_in(duration=int(self.fadeInDuration * 1000))
                 if i is not 0: # 最初の曲のみ0[sec]から再生
-                    self.thisSongStartPosition = self.prevSongEndUntilEightBeatPosition - self.songDict[song].BPM.beats[0]
+                    # self.thisSongStartPosition = self.prevSongEndUntilEightBeatPosition - self.songDict[song].BPM.beats[0]
+                    self.thisSongStartPosition = self.prevSongEndBeatPosition - self.songDict[song].BPM.beats[7]
                 self.mixDown = self.mixDown.overlay(self.song_as, position=self.thisSongStartPosition*1000, loop=False, times=1, gain_during_overlay=0)
                 self.startPositionDict[song] = self.thisSongStartPosition
-                self.prevSongEndUntilEightBeatPosition += (self.songDict[song].BPM.beats[-8] - self.songDict[song].BPM.beats[0])
-                self.fadeInDuration = self.songDict[song].BPM.beats[-1] - self.songDict[song].BPM.beats[-8]
+                # self.prevSongEndUntilEightBeatPosition += (self.songDict[song].BPM.beats[-8] - self.songDict[song].BPM.beats[0])
+                self.prevSongEndBeatPosition += (self.songDict[song].BPM.beats[-1] - self.songDict[song].BPM.beats[0])
         else:
             # ミックスを書き出す
             print("\nExporting Mix...")
@@ -200,18 +205,19 @@ class Analyse:
     def analyse_bpm(self):
         '''
 
-        参考 : https://qiita.com/yuuki__/items/4bc16ae439de46cd0d76
+        参考 :
+        https://qiita.com/yuuki__/items/4bc16ae439de46cd0d76
+        https://www.wizard-notes.com/entry/music-analysis/compute-bpm-with-librosa
+
+        https://librosa.github.io/librosa/generated/librosa.beat.tempo.html#librosa.beat.tempo
+        https://librosa.github.io/librosa/generated/librosa.beat.beat_track.html
 
         '''
         for file_name,path in tqdm(zip(self.file_names,self.file_path)):
             if file_name not in self.bpm:
                 self.music, self.sr = librosa.load(path)
-                # self._bpm =  librosa.beat.tempo(self.music,self.sr)
-                # onset_env = librosa.onset.onset_strength(self.music, self.sr)
                 self._bpm, self._beatsPosition = librosa.beat.beat_track(self.music,self.sr)
-                # 開始拍位置をフレームから秒に変換する
                 self.beatsPosition = librosa.frames_to_time(self._beatsPosition)
-                # self._bpm = librosa.beat.tempo(onset_env, self.sr)
                 self.bpm[file_name] = BPM(self._bpm, self.beatsPosition)
             else:
                 continue
@@ -262,7 +268,6 @@ class Analyse:
                     for j in range(self.allChroma.shape[1]):
                         self._chroma[i] += self.allChroma[i][j]
             # Chromaとコサイン類似度が最大になるスケールを調べる
-            # TODO : 調を決定せずにコサイン類似度を楽曲間類似度に反映させた方がいいか検討する
             self.maximum = -100000
             self._key = ""
             for scale_index, (name, templateVec) in enumerate(self.scale_dic.items()):
@@ -313,8 +318,10 @@ class Map:
         for i, s1 in enumerate(self.songDict.values()):
             for j, s2 in enumerate(self.songDict.values()):
                 if i is not j:
-                    self.songMap[i][j] = abs(s1.BPM.BPM - s2.BPM.BPM) / 5
+                    self.songMap[i][j] = (abs(s1.BPM.BPM - s2.BPM.BPM) ** 1.2) * 0.0001
                     self.songMap[i][j] += 1 - self.key_distance(s1.Key, s2.Key)
+                    print("Key similarity : " + str((abs(s1.BPM.BPM - s2.BPM.BPM) ** 1.2) * 0.0001))
+                    print("Key similarity :" + str(1 - self.key_distance(s1.Key, s2.Key)))
                 else :
                     self.songMap[i][j] = 10000
 
@@ -327,6 +334,8 @@ class Map:
                 for sortedIdx in sortedIdxArr:
                     if sortedIdx not in self.songListIndex:
                         li.append(sortedIdx)
+                    if len(li) >= 2:
+                        break
                 if len(li) is not 0:
                     self.songListIndex[idx] = random.choice(li)
                 li.clear
@@ -356,6 +365,13 @@ class Map:
                         [8, 6, 4, 2, 0, 2, 4, 6, 8, 10, 12, 10],
                         [10, 8, 6, 4, 2, 0, 2, 4, 6, 8, 10, 12]]
         return self.keyDist[self.scale.index(key1)][self.scale.index(key2)] / 12
+
+    def printMap(self):
+        print("songMap : ")
+        pprint(self.songMap)
+
+    def printList(self):
+        print(self.playList)
 
 class BPM(NamedTuple):
     BPM: np.float64
@@ -417,10 +433,12 @@ for k, tp in bpm_list.items():
 # 楽曲間類似度のマップを作成
 print("\nAnalyzing song-song similarity...")
 Map = Map(song_dict, (1,1))
+Map.printMap()
 
-# 曲順のリストを表示
+# 曲順のリストを作成
 print("\nDetermining playback order...")
 play_list = Map.play_list()
+Map.printList()
 
 # instantiation player
 player = PlayMusic(song_dict,play_list)
