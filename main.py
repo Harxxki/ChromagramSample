@@ -128,7 +128,7 @@ class PlayMusic:
         ### 方針: 適切な長さのサイレンスに楽曲をオーバーレイする (-> 最後に無音部分をカット?)
         self.silenceDuration = 0
         for song in self.playList:
-            self.silenceDuration += self.songDict[song].BPM.beats[-8]
+            self.silenceDuration += self.songDict[song].BPM.beats[-16]
         else:
             self.silenceDuration += 20
         self.mixDown = dub.AudioSegment.silent(duration=self.silenceDuration * 1000)
@@ -144,8 +144,8 @@ class PlayMusic:
                 # self.prevSongEndBeatPosition = self.songDict[song].BPM.beats[-1] # 曲の終了拍位置[sec]
                 self.song_as = dub.AudioSegment.from_wav(song)
                 self.time = self.song_as.duration_seconds # 再生時間[sec]
-                self.fadeOutDuration = self.time - self.songDict[song].BPM.beats[-8]
-                self.fadeInDuration = self.songDict[song].BPM.beats[7]
+                self.fadeOutDuration = self.time - self.songDict[song].BPM.beats[-16]
+                self.fadeInDuration = self.songDict[song].BPM.beats[15]
                 if i is not 0 and i is not len(self.playList)-1: # フェードアウト、フェードインを適用
                     self.song_as = self.song_as.fade_in(duration=int(self.fadeInDuration * 1000))
                     self.song_as = self.song_as.fade_out(duration=int(self.fadeOutDuration * 1000))
@@ -155,7 +155,7 @@ class PlayMusic:
                     self.song_as = self.song_as.fade_in(duration=int(self.fadeInDuration * 1000))
                 if i is not 0: # 最初の曲のみ0[sec]から再生
                     # self.thisSongStartPosition = self.prevSongEndUntilEightBeatPosition - self.songDict[song].BPM.beats[0]
-                    self.thisSongStartPosition = self.prevSongEndBeatPosition - self.songDict[song].BPM.beats[7]
+                    self.thisSongStartPosition = self.prevSongEndBeatPosition - self.songDict[song].BPM.beats[15]
                 self.mixDown = self.mixDown.overlay(self.song_as, position=self.thisSongStartPosition*1000, loop=False, times=1, gain_during_overlay=0)
                 self.startPositionDict[song] = self.thisSongStartPosition
                 # self.prevSongEndUntilEightBeatPosition += (self.songDict[song].BPM.beats[-8] - self.songDict[song].BPM.beats[0])
@@ -318,23 +318,25 @@ class Map:
         for i, s1 in enumerate(self.songDict.values()):
             for j, s2 in enumerate(self.songDict.values()):
                 if i is not j:
-                    self.songMap[i][j] = (abs(s1.BPM.BPM - s2.BPM.BPM) ** 1.2) * 0.0001
-                    self.songMap[i][j] += 1 - self.key_distance(s1.Key, s2.Key)
-                    print("Key similarity : " + str((abs(s1.BPM.BPM - s2.BPM.BPM) ** 1.2) * 0.0001))
-                    print("Key similarity :" + str(1 - self.key_distance(s1.Key, s2.Key)))
+                    self.songMap[i][j] = (abs(s1.BPM.BPM - s2.BPM.BPM) ** 1.3) * 0.01
+                    print("BPM similarity :" + str(self.songMap[i][j]))
+                    self.songMap[i][j] += (1 - self.key_distance(s1.Key, s2.Key)) ** 1.2
+                    print("Key similarity :" + str((1 - self.key_distance(s1.Key, s2.Key)) ** 1.2))
                 else :
                     self.songMap[i][j] = 10000
 
         for idx, songIdx in enumerate(self.songListIndex):
             if idx is 0:
-                self.songListIndex[idx] = random.randrange(len(self.songDict))
+                # self.songListIndex[idx] = random.randrange(len(self.songDict))
+                self.songListIndex[idx] = 19 # The Nightsを起点にする
             else:
                 li = []
-                sortedIdxArr = np.argsort(self.songMap[int(self.songListIndex[i-1])])
+                row_num = int(self.songListIndex[idx-1])
+                sortedIdxArr = np.argsort(self.songMap[row_num])
                 for sortedIdx in sortedIdxArr:
                     if sortedIdx not in self.songListIndex:
                         li.append(sortedIdx)
-                    if len(li) >= 2:
+                    if len(li) >= 1:
                         break
                 if len(li) is not 0:
                     self.songListIndex[idx] = random.choice(li)
@@ -352,23 +354,38 @@ class Map:
 
     def key_distance(self, key1, key2):
         self.scale = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
-        self.keyDist = [[12, 10, 8, 6, 4, 2, 0, 2, 4, 6, 8, 10],
-                        [10, 12, 10, 8, 6, 4, 2, 0, 2, 4, 6, 8],
-                        [8, 10, 12, 10, 8, 6, 4, 2, 0, 2, 4, 6],
-                        [6, 8, 10, 12, 10, 8, 6, 4, 2, 0, 2, 4],
-                        [4, 6, 8, 10, 12, 10, 8, 6, 4, 2, 0, 2],
-                        [2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 2, 0],
-                        [0, 2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 2],
-                        [2, 0, 2, 4, 6, 8, 10, 12, 10, 8, 6, 4],
-                        [4, 2, 0, 2, 4, 6, 8, 10, 12, 10, 8, 6],
-                        [6, 4, 2, 0, 2, 4, 6, 8, 10, 12, 10, 8],
-                        [8, 6, 4, 2, 0, 2, 4, 6, 8, 10, 12, 10],
-                        [10, 8, 6, 4, 2, 0, 2, 4, 6, 8, 10, 12]]
-        return self.keyDist[self.scale.index(key1)][self.scale.index(key2)] / 12
+        # self.keyDist = [[12, 10, 8, 6, 4, 2, 0, 2, 4, 6, 8, 10],
+        #                [10, 12, 10, 8, 6, 4, 2, 0, 2, 4, 6, 8],
+        #                [8, 10, 12, 10, 8, 6, 4, 2, 0, 2, 4, 6],
+        #                [6, 8, 10, 12, 10, 8, 6, 4, 2, 0, 2, 4],
+        #                [4, 6, 8, 10, 12, 10, 8, 6, 4, 2, 0, 2],
+        #                [2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 2, 0],
+        #                [0, 2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 2],
+        #                [2, 0, 2, 4, 6, 8, 10, 12, 10, 8, 6, 4],
+        #                [4, 2, 0, 2, 4, 6, 8, 10, 12, 10, 8, 6],
+        #                [6, 4, 2, 0, 2, 4, 6, 8, 10, 12, 10, 8],
+        #                [8, 6, 4, 2, 0, 2, 4, 6, 8, 10, 12, 10],
+        #                [10, 8, 6, 4, 2, 0, 2, 4, 6, 8, 10, 12]]
+        #return self.keyDist[self.scale.index(key1)][self.scale.index(key2)] / 12
+
+        #　共通している音階の数の隣接行列
+        self.keyDist = [[7, 2, 5, 4, 3, 6, 2, 6, 3, 4, 5, 2],
+                        [2, 7, 2, 5, 4, 3, 6, 2, 6, 3, 4, 5],
+                        [5, 2, 7, 2, 5, 4, 3, 6, 2, 6, 3, 4],
+                        [4, 5, 2, 7, 2, 5, 4, 3, 6, 2, 6, 3],
+                        [3, 4, 5, 2, 7, 2, 5, 4, 3, 6, 2, 6],
+                        [6, 3, 4, 5, 2, 7, 2, 5, 4, 3, 6, 2],
+                        [2, 6, 3, 4, 5, 2, 7, 2, 5, 4, 3, 6],
+                        [6, 2, 6, 3, 4, 5, 2, 7, 2, 5, 4, 3],
+                        [3, 6, 2, 6, 3, 4, 5, 2, 7, 2, 5, 4],
+                        [4, 3, 6, 2, 6, 3, 4, 5, 2, 7, 2, 5],
+                        [5, 4, 3, 6, 2, 6, 3, 4, 5, 2, 7, 2],
+                        [2, 5, 4, 3, 6, 2, 6, 3, 4, 5, 2, 7]]
+        return self.keyDist[self.scale.index(key1)][self.scale.index(key2)] / 7
 
     def printMap(self):
         print("songMap : ")
-        pprint(self.songMap)
+        print(*self.songMap)
 
     def printList(self):
         print(self.playList)
@@ -433,12 +450,11 @@ for k, tp in bpm_list.items():
 # 楽曲間類似度のマップを作成
 print("\nAnalyzing song-song similarity...")
 Map = Map(song_dict, (1,1))
-Map.printMap()
 
 # 曲順のリストを作成
 print("\nDetermining playback order...")
 play_list = Map.play_list()
-Map.printList()
+Map.printMap()
 
 # instantiation player
 player = PlayMusic(song_dict,play_list)
