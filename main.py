@@ -1,3 +1,5 @@
+#coding:utf-8
+
 """
 
      * 楽曲間類似度の計算 -> リストを作って再生
@@ -10,7 +12,6 @@ Todo:
 
 """
 
-#coding:utf-8
 from collections import OrderedDict
 import pydub as dub
 from pydub.playback import play
@@ -260,7 +261,7 @@ class Analyse:
     def analyse_key(self):
         for file_name,path in tqdm(zip(self.file_names,self.file_path)):
             if file_name not in self.chroma:
-                self.music, self.sr = librosa.load(path,offset=60.0, duration=30.0)
+                self.music, self.sr = librosa.load(path,offset=30.0, duration=30.0)
                 harmonic, percussive = librosa.effects.hpss(self.music)
                 self.allChroma = librosa.feature.chroma_cens(y=harmonic)
                 self._chroma = np.zeros(12)
@@ -318,17 +319,23 @@ class Map:
         for i, s1 in enumerate(self.songDict.values()):
             for j, s2 in enumerate(self.songDict.values()):
                 if i is not j:
-                    self.songMap[i][j] = (abs(s1.BPM.BPM - s2.BPM.BPM) ** 1.3) * 0.01
-                    print("BPM similarity :" + str(self.songMap[i][j]))
-                    self.songMap[i][j] += (1 - self.key_distance(s1.Key, s2.Key)) ** 1.2
-                    print("Key similarity :" + str((1 - self.key_distance(s1.Key, s2.Key)) ** 1.2))
+                    #self.songMap[i][j] = (abs(s1.BPM.BPM - s2.BPM.BPM) ** 1.2) * 0.01
+                    #print("BPM similarity :" + str(self.songMap[i][j]))
+                    #self.songMap[i][j] = (1 - self.key_distance(s1.Key, s2.Key)) ** 1.2
+                    #print("Key similarity :" + str((1 - self.key_distance(s1.Key, s2.Key)) ** 1.2))
+                    self.songMap[i][j] = random.random() # 完全ランダム
                 else :
                     self.songMap[i][j] = 10000
+
+        self.songDict_list = []
+
+        for song in self.songDict.keys():
+            self.songDict_list.append(song)
 
         for idx, songIdx in enumerate(self.songListIndex):
             if idx is 0:
                 # self.songListIndex[idx] = random.randrange(len(self.songDict))
-                self.songListIndex[idx] = 19 # The Nightsを起点にする
+                self.songListIndex[idx] = self.songDict_list.index("アヴィーチー - The Nights[cutted].wav") # The Nightsを起点にする
             else:
                 li = []
                 row_num = int(self.songListIndex[idx-1])
@@ -341,11 +348,6 @@ class Map:
                 if len(li) is not 0:
                     self.songListIndex[idx] = random.choice(li)
                 li.clear
-
-        self.songDict_list = []
-
-        for song in self.songDict.keys():
-            self.songDict_list.append(song)
 
         for songIdx in self.songListIndex:
             self.playList.append(self.songDict_list[int(songIdx)])
@@ -385,7 +387,7 @@ class Map:
 
     def printMap(self):
         print("songMap : ")
-        print(*self.songMap)
+        print(self.songMap)
 
     def printList(self):
         print(self.playList)
