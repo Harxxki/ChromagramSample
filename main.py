@@ -131,7 +131,7 @@ class PlayMusic:
         for song in self.playList:
             self.silenceDuration += self.songDict[song].BPM.beats[-16]
         else:
-            self.silenceDuration += 20
+            self.silenceDuration += 60
         self.mixDown = dub.AudioSegment.silent(duration=self.silenceDuration * 1000)
         # 拍位置を合わせて楽曲をオーバーレイする
         # エフェクトを適用する(High Pass and Fade in)
@@ -164,12 +164,12 @@ class PlayMusic:
         else:
             # ミックスを書き出す
             print("\nExporting Mix...")
-            # chunks = split_on_silence(self.mixDown, min_silence_len=3000, silence_thresh=-40, keep_silence=500)
+            chunks = split_on_silence(self.mixDown, min_silence_len=3000, silence_thresh=-40, keep_silence=500)
             self._exPath = "/Users/hmori/ChromagramSample3/MixDown"
             if not os.path.isdir(self._exPath):
                 os.makedirs(self._exPath)
-            # chunks[0].export(self._exPath + "/" + "MixDown😈.mp3", format="mp3")
-            self.mixDown.export(self._exPath + "/" + "MixDown😈.mp3", format="mp3")
+            chunks[0].export(self._exPath + "/" + "MixDown😈.mp3", format="mp3")
+            # self.mixDown.export(self._exPath + "/" + "MixDown😈.mp3", format="mp3")
             print("\nSuccessful export!🎉🍺 : " + self._exPath + "/" + "MixDown😈.mp3")
             # 曲のリスト、再生位置を書き出す
             print("\n------------------------------- Playlist -------------------------------\n")
@@ -319,11 +319,11 @@ class Map:
         for i, s1 in enumerate(self.songDict.values()):
             for j, s2 in enumerate(self.songDict.values()):
                 if i is not j:
-                    #self.songMap[i][j] = (abs(s1.BPM.BPM - s2.BPM.BPM) ** 1.2) * 0.01
+                    self.songMap[i][j] = (abs(s1.BPM.BPM - s2.BPM.BPM) ** 1.2) * 0.01
                     #print("BPM similarity :" + str(self.songMap[i][j]))
-                    #self.songMap[i][j] = (1 - self.key_distance(s1.Key, s2.Key)) ** 1.2
+                    self.songMap[i][j] += (1 - self.key_distance(s1.Key, s2.Key)) ** 1.2
                     #print("Key similarity :" + str((1 - self.key_distance(s1.Key, s2.Key)) ** 1.2))
-                    self.songMap[i][j] = random.random() # 完全ランダム
+                    #self.songMap[i][j] = random.random() # 完全ランダム
                 else :
                     self.songMap[i][j] = 10000
 
