@@ -343,7 +343,7 @@ class Map:
                 for sortedIdx in sortedIdxArr:
                     if sortedIdx not in self.songListIndex:
                         li.append(sortedIdx)
-                    if len(li) >= 1:
+                    if len(li) >= 2:
                         break
                 if len(li) is not 0:
                     self.songListIndex[idx] = random.choice(li)
