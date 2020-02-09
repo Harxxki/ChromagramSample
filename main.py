@@ -336,7 +336,7 @@ class Map:
         for idx, songIdx in enumerate(self.songListIndex):
             if idx is 0:
                 # self.songListIndex[idx] = random.randrange(len(self.songDict))
-                self.songListIndex[idx] = self.songDict_list.index("Jason Sparks - Close My Eyes feat. J. Little (Original Mix).wav") # The Nightsを起点にする
+                self.songListIndex[idx] = self.songDict_list.index("Jason Sparks - Close My Eyes feat. J. Little (Original Mix).wav") # 起点となる楽曲
             else:
                 li = []
                 row_num = int(self.songListIndex[idx-1])
@@ -461,9 +461,9 @@ Map.printMap()
 print("songDict:")
 for key,item in song_dict.items():
     print("\n" + key + " : ")
-    print("BPM : " + item.BPM.BPM)
-    print("beats[15] : " + item.beats[15])
-    print("beats[-16] : " + item.beats[-16])
+    print("BPM : " + str(item.BPM.BPM))
+    print("beats[15] : " + str(item.BPM.beats[15]))
+    print("beats[-16] : " + str(item.BPM.beats[-16]))
     print("Key : " + item.Key)
 
 # instantiation player
