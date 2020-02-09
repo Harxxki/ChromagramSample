@@ -319,9 +319,10 @@ class Map:
         for i, s1 in enumerate(self.songDict.values()):
             for j, s2 in enumerate(self.songDict.values()):
                 if i is not j:
-                    self.songMap[i][j] = (abs(s1.BPM.BPM - s2.BPM.BPM) ** 1.2) * 0.01
+#                    self.songMap[i][j] = (abs(s1.BPM.BPM - s2.BPM.BPM) ** 1.2) * 0.01
+                    self.songMap[i][j] = (abs(s1.BPM.BPM - s2.BPM.BPM) ** 1.2)
                     #print("BPM similarity :" + str(self.songMap[i][j]))
-                    self.songMap[i][j] += (1 - self.key_distance(s1.Key, s2.Key)) ** 1.2
+                    #self.songMap[i][j] += (1 - self.key_distance(s1.Key, s2.Key)) ** 1.2
                     #print("Key similarity :" + str((1 - self.key_distance(s1.Key, s2.Key)) ** 1.2))
                     #self.songMap[i][j] = random.random() # 完全ランダム
                 else :
@@ -335,7 +336,7 @@ class Map:
         for idx, songIdx in enumerate(self.songListIndex):
             if idx is 0:
                 # self.songListIndex[idx] = random.randrange(len(self.songDict))
-                self.songListIndex[idx] = self.songDict_list.index("アヴィーチー - The Nights[cutted].wav") # The Nightsを起点にする
+                self.songListIndex[idx] = self.songDict_list.index("Jason Sparks - Close My Eyes feat. J. Little (Original Mix).wav") # The Nightsを起点にする
             else:
                 li = []
                 row_num = int(self.songListIndex[idx-1])
@@ -457,6 +458,13 @@ Map = Map(song_dict, (1,1))
 print("\nDetermining playback order...")
 play_list = Map.play_list()
 Map.printMap()
+print("songDict:")
+for key,item in song_dict.items():
+    print("\n" + key + " : ")
+    print("BPM : " + item.BPM.BPM)
+    print("beats[15] : " + item.beats[15])
+    print("beats[-16] : " + item.beats[-16])
+    print("Key : " + item.Key)
 
 # instantiation player
 player = PlayMusic(song_dict,play_list)
