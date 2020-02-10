@@ -6,7 +6,7 @@
 
 Todo:
 
-    * python test.py (オーディオファイルまでの相対パス)
+    * python main.py (オーディオファイルまでの相対パス)
     * オーディオフォルダの中に正解アノテーションのフォルダを入れる
     * オーディオの対応形式: mp3,wav(mp3はwavに変換)
 
@@ -84,12 +84,12 @@ class WavSaveTmp:
             handle_wav = TransToWav(self.dir_path,self.file_name)
             handle_wav.save_wav()
 
-class PlayMusic:
+class Mixer:
     """
 
-     音楽再生クラス
+     音楽再生・ミックスクラス
 
-    Attributes:
+     Attributes:
         self.wav_name (リスト): tmp直下のwavファイルのリスト.
         self.path (リスト): tmp直下のwavファイル(絶対パス)のリスト.
 
@@ -135,32 +135,28 @@ class PlayMusic:
         self.mixDown = dub.AudioSegment.silent(duration=self.silenceDuration * 1000)
         # 拍位置を合わせて楽曲をオーバーレイする
         # エフェクトを適用する(High Pass and Fade in)
-        self.thisSongStartPosition = 0 # 曲の再生開始位置[sec]
-        # self.prevSongEndUntilEightBeatPosition = 0 # 曲の最後から8拍目の位置[sec]
+        self.startPosition = 0 # 曲の再生開始位置[sec]
         self.prevSongEndBeatPosition = 0 # 曲の終了拍位置[sec]
         self.fadeInDuration = 0 # 次の曲のフェードインをかける時間[sec]
         self.fadeOutDuration = 0 # 曲のフェードアウトをかける時間[sec]
         self.startPositionDict = {} # 開始位置を記録しておく[sec]
         for i, song in tqdm(enumerate(self.playList)):
-                # self.prevSongEndBeatPosition = self.songDict[song].BPM.beats[-1] # 曲の終了拍位置[sec]
-                self.song_as = dub.AudioSegment.from_wav(song)
-                self.time = self.song_as.duration_seconds # 再生時間[sec]
-                self.fadeOutDuration = self.time - self.songDict[song].BPM.beats[-16]
-                self.fadeInDuration = self.songDict[song].BPM.beats[15]
-                if i is not 0 and i is not len(self.playList)-1: # フェードアウト、フェードインを適用
-                    self.song_as = self.song_as.fade_in(duration=int(self.fadeInDuration * 1000))
-                    self.song_as = self.song_as.fade_out(duration=int(self.fadeOutDuration * 1000))
-                elif i is 0: # フェードアウトのみ適用
-                    self.song_as = self.song_as.fade_out(duration=int(self.fadeOutDuration * 1000))
-                elif i is len(self.playList)-1: # フェードインのみ適用
-                    self.song_as = self.song_as.fade_in(duration=int(self.fadeInDuration * 1000))
-                if i is not 0: # 最初の曲のみ0[sec]から再生
-                    # self.thisSongStartPosition = self.prevSongEndUntilEightBeatPosition - self.songDict[song].BPM.beats[0]
-                    self.thisSongStartPosition = self.prevSongEndBeatPosition - self.songDict[song].BPM.beats[15]
-                self.mixDown = self.mixDown.overlay(self.song_as, position=self.thisSongStartPosition*1000, loop=False, times=1, gain_during_overlay=0)
-                self.startPositionDict[song] = self.thisSongStartPosition
-                # self.prevSongEndUntilEightBeatPosition += (self.songDict[song].BPM.beats[-8] - self.songDict[song].BPM.beats[0])
-                self.prevSongEndBeatPosition += (self.songDict[song].BPM.beats[-1] - self.songDict[song].BPM.beats[0])
+            self.song_as = dub.AudioSegment.from_wav(song)
+            self.fadeOutDuration = self.song_as.duration_seconds - self.songDict[song].BPM.beats[-16] # 再生時間[sec] - 終了から15拍目の位置
+            self.fadeInDuration = self.songDict[song].BPM.beats[15]
+            if i is not 0 and i is not len(self.playList)-1: # フェードアウト、フェードインを適用
+                self.song_as = self.song_as.fade_in(duration=int(self.fadeInDuration * 1000))
+                self.song_as = self.song_as.fade_out(duration=int(self.fadeOutDuration * 1000))
+            elif i is 0: # フェードアウトのみ適用
+                self.song_as = self.song_as.fade_out(duration=int(self.fadeOutDuration * 1000))
+            elif i is len(self.playList)-1: # フェードインのみ適用
+                self.song_as = self.song_as.fade_in(duration=int(self.fadeInDuration * 1000))
+            if i is not 0: # 最初の曲のみ0[sec]から再生
+                self.startPosition = self.prevSongEndBeatPosition - self.songDict[song].BPM.beats[15]
+            self.mixDown = self.mixDown.overlay(self.song_as, position=self.startPosition*1000, loop=False, times=1, gain_during_overlay=0)
+            self.startPositionDict[song] = self.startPosition
+            # self.prevSongEndBeatPosition += (self.songDict[song].BPM.beats[-1] - self.songDict[song].BPM.beats[0])
+            self.prevSongEndBeatPosition = self.startPosition + self.songDict[song].BPM.beats[-1]
         else:
             # ミックスを書き出す
             print("\nExporting Mix...")
@@ -177,7 +173,8 @@ class PlayMusic:
                 songname = os.path.splitext(os.path.basename(song))[0]
                 print(str(index+1) + " " + str(songname))
                 td = datetime.timedelta(seconds=round(self.startPositionDict[song]))
-                print("  再生位置 | " + str(td) + "\n")
+#                print("  再生位置 | " + str(td) + "\n")
+                print("  再生位置 | " + str(self.startPositionDict[song]) + "\n")
             print("------------------------------------------------------------------------\n\n")
         return
 
@@ -319,11 +316,8 @@ class Map:
         for i, s1 in enumerate(self.songDict.values()):
             for j, s2 in enumerate(self.songDict.values()):
                 if i is not j:
-#                    self.songMap[i][j] = (abs(s1.BPM.BPM - s2.BPM.BPM) ** 1.2) * 0.01
-                    self.songMap[i][j] = (abs(s1.BPM.BPM - s2.BPM.BPM) ** 1.2)
-                    #print("BPM similarity :" + str(self.songMap[i][j]))
-                    #self.songMap[i][j] += (1 - self.key_distance(s1.Key, s2.Key)) ** 1.2
-                    #print("Key similarity :" + str((1 - self.key_distance(s1.Key, s2.Key)) ** 1.2))
+                    self.songMap[i][j] = (abs(s1.BPM.BPM - s2.BPM.BPM) * 0.04 ) ** 1.2
+                    self.songMap[i][j] += (1 - self.key_distance(s1.Key, s2.Key)) ** 1.2
                     #self.songMap[i][j] = random.random() # 完全ランダム
                 else :
                     self.songMap[i][j] = 10000
@@ -344,7 +338,7 @@ class Map:
                 for sortedIdx in sortedIdxArr:
                     if sortedIdx not in self.songListIndex:
                         li.append(sortedIdx)
-                    if len(li) >= 2:
+                    if len(li) >= 1:
                         break
                 if len(li) is not 0:
                     self.songListIndex[idx] = random.choice(li)
@@ -356,21 +350,6 @@ class Map:
         return self.playList
 
     def key_distance(self, key1, key2):
-        self.scale = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
-        # self.keyDist = [[12, 10, 8, 6, 4, 2, 0, 2, 4, 6, 8, 10],
-        #                [10, 12, 10, 8, 6, 4, 2, 0, 2, 4, 6, 8],
-        #                [8, 10, 12, 10, 8, 6, 4, 2, 0, 2, 4, 6],
-        #                [6, 8, 10, 12, 10, 8, 6, 4, 2, 0, 2, 4],
-        #                [4, 6, 8, 10, 12, 10, 8, 6, 4, 2, 0, 2],
-        #                [2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 2, 0],
-        #                [0, 2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 2],
-        #                [2, 0, 2, 4, 6, 8, 10, 12, 10, 8, 6, 4],
-        #                [4, 2, 0, 2, 4, 6, 8, 10, 12, 10, 8, 6],
-        #                [6, 4, 2, 0, 2, 4, 6, 8, 10, 12, 10, 8],
-        #                [8, 6, 4, 2, 0, 2, 4, 6, 8, 10, 12, 10],
-        #                [10, 8, 6, 4, 2, 0, 2, 4, 6, 8, 10, 12]]
-        #return self.keyDist[self.scale.index(key1)][self.scale.index(key2)] / 12
-
         #　共通している音階の数の隣接行列
         self.keyDist = [[7, 2, 5, 4, 3, 6, 2, 6, 3, 4, 5, 2],
                         [2, 7, 2, 5, 4, 3, 6, 2, 6, 3, 4, 5],
@@ -451,26 +430,28 @@ for k, tp in bpm_list.items():
     song_dict[k] = BPM_n_Key(tp, key_list[k])
 
 # 楽曲間類似度のマップを作成
-print("\nAnalyzing song-song similarity...")
+print("\nAnalyzing music between similarity...")
 Map = Map(song_dict, (1,1))
 
 # 曲順のリストを作成
 print("\nDetermining playback order...")
 play_list = Map.play_list()
 Map.printMap()
-print("songDict:")
+print("\nsongDict:")
 for key,item in song_dict.items():
     print("\n" + key + " : ")
     print("BPM : " + str(item.BPM.BPM))
+    print("beats[0] : " + str(item.BPM.beats[0]))
     print("beats[15] : " + str(item.BPM.beats[15]))
     print("beats[-16] : " + str(item.BPM.beats[-16]))
+    print("beats[-1] : " + str(item.BPM.beats[-1]))
     print("Key : " + item.Key)
 
 # instantiation player
-player = PlayMusic(song_dict,play_list)
+mixer = Mixer(song_dict,play_list)
 # MIXを作成
 print("\nCreating Mix...")
-player.MIX()
+mixer.MIX()
 
 # clean up temp directory
 tmp.cleanup()
