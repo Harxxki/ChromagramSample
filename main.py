@@ -84,7 +84,7 @@ class WavSaveTmp:
             handle_wav = TransToWav(self.dir_path,self.file_name)
             handle_wav.save_wav()
 
-class Mixer:
+class Mix:
     """
 
      音楽再生・ミックスクラス
@@ -129,9 +129,7 @@ class Mixer:
         ### 方針: 適切な長さのサイレンスに楽曲をオーバーレイする (-> 最後に無音部分をカット?)
         self.silenceDuration = 0
         for song in self.playList:
-            self.silenceDuration += self.songDict[song].BPM.beats[-16]
-        else:
-            self.silenceDuration += 60
+            self.silenceDuration += self.songDict[song].BPM.beats[-1]
         self.mixDown = dub.AudioSegment.silent(duration=self.silenceDuration * 1000)
         # 拍位置を合わせて楽曲をオーバーレイする
         # エフェクトを適用する(High Pass and Fade in)
@@ -160,7 +158,7 @@ class Mixer:
         else:
             # ミックスを書き出す
             print("\nExporting Mix...")
-            chunks = split_on_silence(self.mixDown, min_silence_len=3000, silence_thresh=-40, keep_silence=500)
+            chunks = split_on_silence(self.mixDown, min_silence_len=3000, silence_thresh=-40, keep_silence=1000)
             self._exPath = "/Users/hmori/ChromagramSample3/MixDown"
             if not os.path.isdir(self._exPath):
                 os.makedirs(self._exPath)
@@ -173,8 +171,9 @@ class Mixer:
                 songname = os.path.splitext(os.path.basename(song))[0]
                 print(str(index+1) + " " + str(songname))
                 td = datetime.timedelta(seconds=round(self.startPositionDict[song]))
-#                print("  再生位置 | " + str(td) + "\n")
-                print("  再生位置 | " + str(self.startPositionDict[song]) + "\n")
+                print("  Play position | " + str(td) + "\n")
+#                print(" Play position | " + str(self.startPositionDict[song]) + "\n")
+            print(" Mix duration | " + str(chunks[0].duration_seconds))
             print("------------------------------------------------------------------------\n\n")
         return
 
@@ -351,6 +350,7 @@ class Map:
 
     def key_distance(self, key1, key2):
         #　共通している音階の数の隣接行列
+        self.scale = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
         self.keyDist = [[7, 2, 5, 4, 3, 6, 2, 6, 3, 4, 5, 2],
                         [2, 7, 2, 5, 4, 3, 6, 2, 6, 3, 4, 5],
                         [5, 2, 7, 2, 5, 4, 3, 6, 2, 6, 3, 4],
@@ -448,7 +448,7 @@ for key,item in song_dict.items():
     print("Key : " + item.Key)
 
 # instantiation player
-mixer = Mixer(song_dict,play_list)
+mixer = Mix(song_dict,play_list)
 # MIXを作成
 print("\nCreating Mix...")
 mixer.MIX()
