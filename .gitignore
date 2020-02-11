@@ -122,6 +122,10 @@ audios/GiantSteps+ EDM Key Dataset/
 audios/sampleaudio
 audios/audios
 MixDown
+waves
 
 # test file
 test.py
+
+# env File
+.venv

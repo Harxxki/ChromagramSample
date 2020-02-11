@@ -44,7 +44,7 @@ class TransToWav:
         self.ext = self.split_path[-1]
         self.file_name = _path
         # self.save_file = tmp.name +"/"+ self.file_name + ".wav"
-        self.save_file = tmp.name +"/"+ os.path.splitext(self.file_name)[0] + ".wav"
+        self.save_file = waves +"/"+ os.path.splitext(self.file_name)[0] + ".wav"
 
     def trans_wav(self):
         self.music = dub.AudioSegment.from_mp3(self.path)
@@ -58,7 +58,7 @@ class TransToWav:
             else:
                 pass
 
-class WavSaveTmp:
+class WavSaveWaves:
     '''
 
     参考: https://qiita.com/yuuki__/items/4bc16ae439de46cd0d76
@@ -75,7 +75,7 @@ class WavSaveTmp:
         else:
             pass
 
-    def save_tmp(self):
+    def save_waves(self):
         if type(self.file_name) is list:
             for i in self.file_name:
                 handle_wav = TransToWav(self.path,i)
@@ -111,12 +111,12 @@ class Mix:
         self._songDict = songDict
         self.songDict = OrderedDict()
         for key in self._songDict:
-            self.songDict[tmp.name + "/" + key] = self._songDict[key]
+            self.songDict[wavAudioPath + "/" + key] = self._songDict[key]
         if playList is None:
             self.wav_name = os.listdir(tmp.name)
-            self.playList = [tmp.name + "/" + i for i in self.wav_name]
+            self.playList = [wavAudioPath + "/" + i for i in self.wav_name]
         else:
-            self.playList = [tmp.name + "/" + i for i in playList]
+            self.playList = [wavAudioPath + "/" + i for i in playList]
 
     def play(self):
         for i in self.playList:
@@ -126,13 +126,11 @@ class Mix:
         self.play()
 
     def MIX(self):
-        ### 方針: 適切な長さのサイレンスに楽曲をオーバーレイする (-> 最後に無音部分をカット?)
         self.silenceDuration = 0
         for song in self.playList:
             self.silenceDuration += self.songDict[song].BPM.beats[-1]
         self.mixDown = dub.AudioSegment.silent(duration=self.silenceDuration * 1000)
         # 拍位置を合わせて楽曲をオーバーレイする
-        # エフェクトを適用する(High Pass and Fade in)
         self.startPosition = 0 # 曲の再生開始位置[sec]
         self.prevSongEndBeatPosition = 0 # 曲の終了拍位置[sec]
         self.fadeInDuration = 0 # 次の曲のフェードインをかける時間[sec]
@@ -153,7 +151,6 @@ class Mix:
                 self.startPosition = self.prevSongEndBeatPosition - self.songDict[song].BPM.beats[15]
             self.mixDown = self.mixDown.overlay(self.song_as, position=self.startPosition*1000, loop=False, times=1, gain_during_overlay=0)
             self.startPositionDict[song] = self.startPosition
-            # self.prevSongEndBeatPosition += (self.songDict[song].BPM.beats[-1] - self.songDict[song].BPM.beats[0])
             self.prevSongEndBeatPosition = self.startPosition + self.songDict[song].BPM.beats[-1]
         else:
             # ミックスを書き出す
@@ -163,24 +160,13 @@ class Mix:
             if not os.path.isdir(self._exPath):
                 os.makedirs(self._exPath)
             chunks[0].export(self._exPath + "/" + "MixDown😈.mp3", format="mp3")
-            # self.mixDown.export(self._exPath + "/" + "MixDown😈.mp3", format="mp3")
             print("\nSuccessful export!🎉🍺 : " + self._exPath + "/" + "MixDown😈.mp3")
-            # 曲のリスト、再生位置を書き出す
-            print("\n------------------------------- Playlist -------------------------------\n")
-            for index, song in enumerate(self.playList):
-                songname = os.path.splitext(os.path.basename(song))[0]
-                print(str(index+1) + " " + str(songname))
-                td = datetime.timedelta(seconds=round(self.startPositionDict[song]))
-                print("  Play position | " + str(td) + "\n")
-#                print(" Play position | " + str(self.startPositionDict[song]) + "\n")
-            print(" Mix duration | " + str(chunks[0].duration_seconds))
-            print("------------------------------------------------------------------------\n\n")
         return
 
 class Analyse:
 
     def __init__(self):
-        self.dir_path = tmp.name
+        self.dir_path = wavAudioPath
         self.file_names = os.listdir(self.dir_path)
         self.file_path = [self.dir_path + "/" + i for i in self.file_names]
         self.bpm = {}
@@ -380,38 +366,11 @@ class BPM_n_Key(NamedTuple):
     BPM: BPM
     Key: str
 
-def keyTest():
-    # [曲名 - (求めたキー,正解のキー,Y/Nラベル)]
-    list = {}
-    actualKeys = {}
-    key_list = analyser.analyse_key()
-    # actualKeysの生成(+キーの変換)
-    for file in glob(path + "/key" + '/*.txt'):
-        f = open(file)
-        basename = os.path.splitext(os.path.basename(file))[0]+".wav"
-        # convertKeyDict = {}
-        # actualKeys[basename] = convertKeyDict[f.readline()]
-        actualKeys[basename] = f.readline()
-        f.close()
-    for i,(song_name,analyzedKey) in enumerate(key_list.items()):
-        actualKey = actualKeys[song_name]
-        if analyzedKey == actualKey:
-            result = "Y"
-        else:
-            result = "N"
-        list[song_name] = (analyzedKey,actualKey,result)
-        # list[song_name.rjust(25)] = list.pop(song_name)
-        list["song"+str(i)] = list.pop(song_name)
-    pprint(list)
-
 print("\n\nConversioning to wav file...")
 # path
 path = sys.argv[1]
-# make temp directory
-tmp = temp.TemporaryDirectory()
-# mp3,wav save to temp file
-save_ = WavSaveTmp(path)
-save_.save_tmp()
+# make wav file directory
+wavAudioPath = "/Users/hmori/ChromagramSample3/waves"
 
 # instantiation analyser
 analyser = Analyse()
@@ -436,22 +395,11 @@ Map = Map(song_dict, (1,1))
 # 曲順のリストを作成
 print("\nDetermining playback order...")
 play_list = Map.play_list()
-Map.printMap()
-print("\nsongDict:")
-for key,item in song_dict.items():
-    print("\n" + key + " : ")
-    print("BPM : " + str(item.BPM.BPM))
-    print("beats[0] : " + str(item.BPM.beats[0]))
-    print("beats[15] : " + str(item.BPM.beats[15]))
-    print("beats[-16] : " + str(item.BPM.beats[-16]))
-    print("beats[-1] : " + str(item.BPM.beats[-1]))
-    print("Key : " + item.Key)
+print("曲数 : " + len(play_list))
 
 # instantiation player
 mixer = Mix(song_dict,play_list)
+
 # MIXを作成
 print("\nCreating Mix...")
 mixer.MIX()
-
-# clean up temp directory
-tmp.cleanup()
