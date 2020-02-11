@@ -32,58 +32,6 @@ import random
 from tqdm import tqdm
 import datetime
 
-class TransToWav:
-    '''
-
-    参考: https://qiita.com/yuuki__/items/4bc16ae439de46cd0d76
-
-    '''
-    def __init__(self,dir_path,_path):
-        self.path = os.path.join(dir_path,_path)
-        self.split_path = os.path.splitext(self.path)
-        self.ext = self.split_path[-1]
-        self.file_name = _path
-        # self.save_file = tmp.name +"/"+ self.file_name + ".wav"
-        self.save_file = waves +"/"+ os.path.splitext(self.file_name)[0] + ".wav"
-
-    def trans_wav(self):
-        self.music = dub.AudioSegment.from_mp3(self.path)
-        self.music.export(self.save_file,format="wav")
-
-    def save_wav(self):
-            if self.ext == ".mp3":
-                self.trans_wav()
-            elif self.ext == ".wav":
-                shutil.copyfile(self.path,self.save_file)
-            else:
-                pass
-
-class WavSaveWaves:
-    '''
-
-    参考: https://qiita.com/yuuki__/items/4bc16ae439de46cd0d76
-
-    '''
-    def __init__(self,path):
-        self.path = path
-        if os.path.isdir(self.path) is True:
-            self.dir_path = self.path
-            self.file_name = [f for f in os.listdir(self.path) if os.path.isfile(os.path.join(self.path,f))]
-        elif os.path.isfile(path) is True:
-            self.dir_path = os.path.dirname(self.path)
-            self.file_name = os.path.basename(self.path)
-        else:
-            pass
-
-    def save_waves(self):
-        if type(self.file_name) is list:
-            for i in self.file_name:
-                handle_wav = TransToWav(self.path,i)
-                handle_wav.save_wav()
-        else:
-            handle_wav = TransToWav(self.dir_path,self.file_name)
-            handle_wav.save_wav()
-
 class Mix:
     """
 
@@ -108,15 +56,17 @@ class Mix:
             playListを指定しない場合はディレクトリ内の曲をos.listdirで取得した順番で再生
 
         """
-        self._songDict = songDict
-        self.songDict = OrderedDict()
-        for key in self._songDict:
-            self.songDict[wavAudioPath + "/" + key] = self._songDict[key]
+        self.songDict = songDict
         if playList is None:
-            self.wav_name = os.listdir(tmp.name)
-            self.playList = [wavAudioPath + "/" + i for i in self.wav_name]
+            self.wav_name = os.listdir(wavAudioPath)
+            self.playList = self.wav_name
         else:
-            self.playList = [wavAudioPath + "/" + i for i in playList]
+            self.playList = playList
+        print("\nMixをinitした")
+        print("self.playList : ")
+        pprint(self.playList)
+        print("\n合計" + str(len(self.playList)) + "曲")
+        print("2^実行時引数 : " + str(songNum))
 
     def play(self):
         for i in self.playList:
@@ -167,8 +117,13 @@ class Analyse:
 
     def __init__(self):
         self.dir_path = wavAudioPath
-        self.file_names = os.listdir(self.dir_path)
-        self.file_path = [self.dir_path + "/" + i for i in self.file_names]
+        import glob
+        self.wav_path = self.dir_path + '/*.wav'
+        self.file_names = glob.glob(self.wav_path)
+        del self.file_names[songNum:]
+        print("解析するファイル")
+        pprint(self.file_names)
+        self.file_path = self.file_names
         self.bpm = {}
         self.key = {}
         self.chroma = {}
@@ -303,7 +258,6 @@ class Map:
                 if i is not j:
                     self.songMap[i][j] = (abs(s1.BPM.BPM - s2.BPM.BPM) * 0.04 ) ** 1.2
                     self.songMap[i][j] += (1 - self.key_distance(s1.Key, s2.Key)) ** 1.2
-                    #self.songMap[i][j] = random.random() # 完全ランダム
                 else :
                     self.songMap[i][j] = 10000
 
@@ -314,8 +268,7 @@ class Map:
 
         for idx, songIdx in enumerate(self.songListIndex):
             if idx is 0:
-                # self.songListIndex[idx] = random.randrange(len(self.songDict))
-                self.songListIndex[idx] = self.songDict_list.index("Jason Sparks - Close My Eyes feat. J. Little (Original Mix).wav") # 起点となる楽曲
+                self.songListIndex[idx] = random.randrange(len(self.songDict))
             else:
                 li = []
                 row_num = int(self.songListIndex[idx-1])
@@ -367,8 +320,8 @@ class BPM_n_Key(NamedTuple):
     Key: str
 
 print("\n\nConversioning to wav file...")
-# path
-path = sys.argv[1]
+# 曲数(指数が実行時パラメータ)
+songNum = 2 ** int(sys.argv[1])
 # make wav file directory
 wavAudioPath = "/Users/hmori/ChromagramSample3/waves"
 
@@ -395,7 +348,7 @@ Map = Map(song_dict, (1,1))
 # 曲順のリストを作成
 print("\nDetermining playback order...")
 play_list = Map.play_list()
-print("曲数 : " + len(play_list))
+print("曲数 : " + str(len(play_list)))
 
 # instantiation player
 mixer = Mix(song_dict,play_list)
