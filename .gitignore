@@ -123,6 +123,7 @@ audios/sampleaudio
 audios/audios
 MixDown
 waves
+dump
 
 # test file
 test.py

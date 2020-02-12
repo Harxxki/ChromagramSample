@@ -315,94 +315,92 @@ class BPM_n_Key(NamedTuple):
     BPM: BPM
     Key: str
 
-if __name__ == "__main__" :
+if __name__ == "__main__":
 
-    commandArg = sys.argv[1]
+    commandArg = int(sys.argv[1])
 
-    for index in range(int(commandArg)):
+    print("\nConversioning to wav file...")
 
-        print("\nConversioning to wav file...")
+    # 曲数(指数が実行時パラメータ)
+    songNum = 2 ** commandArg
 
-        # 曲数(指数が実行時パラメータ)
-        songNum = 2 ** index
+    # make wav file directory
+    wavAudioPath = "/Users/hmori/ChromagramSample3/waves"
 
-        # make wav file directory
-        wavAudioPath = "/Users/hmori/ChromagramSample3/waves"
+    import time
+    t0 = time.time()
 
-        import time
-        t0 = time.time()
+    # instantiation analyser
+    analyser = Analyse()
 
-        # instantiation analyser
-        analyser = Analyse()
+    # bpm analyse
+    print("\nAnalyzing BPM...")
+    bpm_list = analyser.analyse_bpm()
 
-        # bpm analyse
-        print("\nAnalyzing BPM...")
-        bpm_list = analyser.analyse_bpm()
+    t1 = time.time()
 
-        t1 = time.time()
+    # key analyse
+    print("\nAnalyzing Key...")
+    key_list = analyser.analyse_key()
 
-        # key analyse
-        print("\nAnalyzing Key...")
-        key_list = analyser.analyse_key()
+    t2 = time.time()
 
-        t2 = time.time()
+    # song_dict: [ファイル名 - ((BPM,beats),Key)]の順序付き辞書
+    song_dict = OrderedDict()
+    for k, tp in bpm_list.items():
+        song_dict[k] = BPM_n_Key(tp, key_list[k])
 
-        # song_dict: [ファイル名 - ((BPM,beats),Key)]の順序付き辞書
-        song_dict = OrderedDict()
-        for k, tp in bpm_list.items():
-            song_dict[k] = BPM_n_Key(tp, key_list[k])
+    t3 = time.time()
 
-        t3 = time.time()
+    # 楽曲間類似度のマップを作成
+    print("\nAnalyzing music between similarity...")
+    Map = Map(song_dict, (1,1))
 
-        # 楽曲間類似度のマップを作成
-        print("\nAnalyzing music between similarity...")
-        Map = Map(song_dict, (1,1))
+    t4 = time.time()
 
-        t4 = time.time()
+    # 曲順のリストを作成
+    print("\nDetermining playback order...")
+    play_list = Map.play_list()
+    print("曲数 : " + str(len(play_list)))
 
-        # 曲順のリストを作成
-        print("\nDetermining playback order...")
-        play_list = Map.play_list()
-        print("曲数 : " + str(len(play_list)))
+    t5 = time.time()
 
-        t5 = time.time()
+    # instantiation player
+    mixer = Mix(song_dict,play_list)
+    # MIXを作成
+    print("\nCreating Mix...")
+    mixer.MIX()
 
-        # instantiation player
-        mixer = Mix(song_dict,play_list)
-        # MIXを作成
-        print("\nCreating Mix...")
-        mixer.MIX()
+    t6 = time.time()
 
-        t6 = time.time()
+    # MIXをエクスポート
+    print("\nExporting Mix...")
+    mixer.export()
 
-        # MIXをエクスポート
-        print("\nExporting Mix...")
-        mixer.export()
+    t7 = time.time()
 
-        t7 = time.time()
+    # 最終的に出力するリスト
+    # [指数][曲数][BPM解析にかかった時間][キー解析にかかった時間][songDict作成にかかった時間][マップ作成にかかった時間]
+    # [プレイリスト生成にかかった時間][ミックスの生成にかかった時間][ミックスの書き出しにかかった時間]
+    timeList = []
+    timeList.append(commandArg)
+    timeList.append(songNum)
+    timeList.append(t1 - t0)
+    timeList.append(t2 - t1)
+    timeList.append(t3 - t2)
+    timeList.append(t4 - t3)
+    timeList.append(t5 - t4)
+    timeList.append(t6 - t5)
+    timeList.append(t7 - t6)
 
-        # 最終的に出力するリスト
-        # [指数][曲数][BPM解析にかかった時間][キー解析にかかった時間][songDict作成にかかった時間][マップ作成にかかった時間]
-        # [プレイリスト生成にかかった時間][ミックスの生成にかかった時間][ミックスの書き出しにかかった時間]
-        timeList = []
-        timeList.append(index)
-        timeList.append(songNum)
-        timeList.append(t1 - t0)
-        timeList.append(t2 - t1)
-        timeList.append(t3 - t2)
-        timeList.append(t4 - t3)
-        timeList.append(t5 - t4)
-        timeList.append(t6 - t5)
-        timeList.append(t7 - t6)
+    print("timeList : ")
+    print(timeList)
+    dump_str = ",".join(map(str, timeList))
 
-        print("timeList : ")
-        print(timeList)
-        dump_str = ",".join(map(str, timeList))
+    resultFolderPath = "/Users/hmori/ChromagramSample3/dump"
+    if not os.path.isdir(resultFolderPath):
+        os.makedirs(resultFolderPath)
+    with open(resultFolderPath + "/dump.txt",mode='a') as f:
+        f.write("\n" + dump_str)
 
-        resultFolderPath = "/Users/hmori/ChromagramSample3/dump"
-        if not os.path.isdir(resultFolderPath):
-            os.makedirs(resultFolderPath)
-        with open(resultFolderPath + "/dump.txt",mode='a') as f:
-            f.write("\n" + dump_str)
-
-        print("\nFinish dumping results！🥳: " + resultFolderPath+ "/" + "dump.txt")
+    print("\nFinish dumping results！🥳: " + resultFolderPath+ "/" + "dump.txt")

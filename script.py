@@ -1,4 +1,8 @@
-import main
+import subprocess
+import sys
 
-for i in range(7):
-    exec("main.py i")
+arg = sys.argv[1]
+
+for i in range(int(arg)):
+    cmd = ["python","main.py",str(i)]
+    subprocess.call(cmd)
