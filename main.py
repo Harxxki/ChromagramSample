@@ -126,11 +126,12 @@ class Mix:
         self.play()
 
     def MIX(self):
-        ### 方針: 適切な長さのサイレンスに楽曲をオーバーレイする (-> 最後に無音部分をカット?)
-        self.silenceDuration = 0
+        ### 方針: 適切な長さのサイレンスに楽曲をオーバーレイする
+        self.silenceDuration = self.songDict[self.playList[0]].BPM.beats[15] + dub.AudioSegment.from_wav(self.playList[-1]).duration_seconds - self.songDict[self.playList[-1]].BPM.beats[-1]
         for song in self.playList:
             self.silenceDuration += self.songDict[song].BPM.beats[-1]
-        self.mixDown = dub.AudioSegment.silent(duration=self.silenceDuration * 1000)
+            self.silenceDuration -= self.songDict[song].BPM.beats[15]
+        self.mixDown = dub.AudioSegment.silent(duration=(self.silenceDuration + 1) * 1000) # 1秒バッファを持たせる
         # 拍位置を合わせて楽曲をオーバーレイする
         # エフェクトを適用する(High Pass and Fade in)
         self.startPosition = 0 # 曲の再生開始位置[sec]
@@ -158,12 +159,10 @@ class Mix:
         else:
             # ミックスを書き出す
             print("\nExporting Mix...")
-            chunks = split_on_silence(self.mixDown, min_silence_len=3000, silence_thresh=-40, keep_silence=1000)
             self._exPath = "/Users/hmori/ChromagramSample3/MixDown"
             if not os.path.isdir(self._exPath):
                 os.makedirs(self._exPath)
-            chunks[0].export(self._exPath + "/" + "MixDown😈.mp3", format="mp3")
-            # self.mixDown.export(self._exPath + "/" + "MixDown😈.mp3", format="mp3")
+            self.mixDown.export(self._exPath + "/" + "MixDown😈.mp3", format="mp3")
             print("\nSuccessful export!🎉🍺 : " + self._exPath + "/" + "MixDown😈.mp3")
             # 曲のリスト、再生位置を書き出す
             print("\n------------------------------- Playlist -------------------------------\n")
@@ -171,8 +170,7 @@ class Mix:
                 songname = os.path.splitext(os.path.basename(song))[0]
                 print(str(index+1) + " " + str(songname))
                 td = datetime.timedelta(seconds=round(self.startPositionDict[song]))
-                print("  Play position | " + str(td) + "\n")
-#                print(" Play position | " + str(self.startPositionDict[song]) + "\n")
+                print(" Play position | " + str(td) + "\n")
             print(" Mix duration | " + str(chunks[0].duration_seconds))
             print("------------------------------------------------------------------------\n\n")
         return
