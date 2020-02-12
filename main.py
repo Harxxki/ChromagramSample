@@ -11,7 +11,6 @@
 from collections import OrderedDict
 import pydub as dub
 from pydub.playback import play
-from pydub.silence import split_on_silence
 from pprint import pprint
 from glob import glob
 import os
@@ -115,9 +114,8 @@ class Analyse:
 
     def __init__(self):
         self.dir_path = wavAudioPath
-        import glob
         self.wav_path = self.dir_path + '/*.wav'
-        self.file_names = glob.glob(self.wav_path)
+        self.file_names = glob(self.wav_path)
         del self.file_names[songNum:]
         print("解析するファイル")
         pprint(self.file_names)
@@ -317,88 +315,94 @@ class BPM_n_Key(NamedTuple):
     BPM: BPM
     Key: str
 
-print("\n\nConversioning to wav file...")
+if __name__ == "__main__" :
 
-# 曲数(指数が実行時パラメータ)
-songNum = 2 ** int(sys.argv[1])
+    commandArg = sys.argv[1]
 
-# make wav file directory
-wavAudioPath = "/Users/hmori/ChromagramSample3/waves"
+    for index in range(int(commandArg)):
 
-import time
-t0 = time.time()
+        print("\nConversioning to wav file...")
 
-# instantiation analyser
-analyser = Analyse()
+        # 曲数(指数が実行時パラメータ)
+        songNum = 2 ** index
 
-# bpm analyse
-print("\nAnalyzing BPM...")
-bpm_list = analyser.analyse_bpm()
+        # make wav file directory
+        wavAudioPath = "/Users/hmori/ChromagramSample3/waves"
 
-t1 = time.time()
+        import time
+        t0 = time.time()
 
-# key analyse
-print("\nAnalyzing Key...")
-key_list = analyser.analyse_key()
+        # instantiation analyser
+        analyser = Analyse()
 
-t2 = time.time()
+        # bpm analyse
+        print("\nAnalyzing BPM...")
+        bpm_list = analyser.analyse_bpm()
 
-# song_dict: [ファイル名 - ((BPM,beats),Key)]の順序付き辞書
-song_dict = OrderedDict()
-for k, tp in bpm_list.items():
-    song_dict[k] = BPM_n_Key(tp, key_list[k])
+        t1 = time.time()
 
-t3 = time.time()
+        # key analyse
+        print("\nAnalyzing Key...")
+        key_list = analyser.analyse_key()
 
-# 楽曲間類似度のマップを作成
-print("\nAnalyzing music between similarity...")
-Map = Map(song_dict, (1,1))
+        t2 = time.time()
 
-t4 = time.time()
+        # song_dict: [ファイル名 - ((BPM,beats),Key)]の順序付き辞書
+        song_dict = OrderedDict()
+        for k, tp in bpm_list.items():
+            song_dict[k] = BPM_n_Key(tp, key_list[k])
 
-# 曲順のリストを作成
-print("\nDetermining playback order...")
-play_list = Map.play_list()
-print("曲数 : " + str(len(play_list)))
+        t3 = time.time()
 
-t5 = time.time()
+        # 楽曲間類似度のマップを作成
+        print("\nAnalyzing music between similarity...")
+        Map = Map(song_dict, (1,1))
 
-# instantiation player
-mixer = Mix(song_dict,play_list)
-# MIXを作成
-print("\nCreating Mix...")
-mixer.MIX()
+        t4 = time.time()
 
-t6 = time.time()
+        # 曲順のリストを作成
+        print("\nDetermining playback order...")
+        play_list = Map.play_list()
+        print("曲数 : " + str(len(play_list)))
 
-# MIXをエクスポート
-print("\nExporting Mix...")
-mixer.export()
+        t5 = time.time()
 
-t7 = time.time()
+        # instantiation player
+        mixer = Mix(song_dict,play_list)
+        # MIXを作成
+        print("\nCreating Mix...")
+        mixer.MIX()
 
-# 最終的に出力するリスト
-# [指数][曲数][BPM解析にかかった時間][キー解析にかかった時間][songDict作成にかかった時間][マップ作成にかかった時間]
-# [プレイリスト生成にかかった時間][ミックスの生成にかかった時間][ミックスの書き出しにかかった時間]
-timeList = []
-timeList.append(sys.argv[1])
-timeList.append(songNum)
-timeList.append(t1 - t0)
-timeList.append(t2 - t1)
-timeList.append(t3 - t2)
-timeList.append(t4 - t3)
-timeList.append(t5 - t4)
-timeList.append(t6 - t5)
-timeList.append(t7 - t6)
+        t6 = time.time()
 
-print("timeList : ")
-print(timeList)
-dump_str = ",".join(map(str, timeList))
+        # MIXをエクスポート
+        print("\nExporting Mix...")
+        mixer.export()
 
-resultFolderPath = "/Users/hmori/ChromagramSample3/dump"
-if not os.path.isdir(resultFolderPath):
-    os.makedirs(resultFolderPath)
-with open(resultFolderPath + "/dump.txt",mode='a') as f:
-    f.write("\n" + dump_str)
+        t7 = time.time()
 
-print("\nFinish dumping results！🥳: " + resultFolderPath+ "/" + "dump.txt")
+        # 最終的に出力するリスト
+        # [指数][曲数][BPM解析にかかった時間][キー解析にかかった時間][songDict作成にかかった時間][マップ作成にかかった時間]
+        # [プレイリスト生成にかかった時間][ミックスの生成にかかった時間][ミックスの書き出しにかかった時間]
+        timeList = []
+        timeList.append(index)
+        timeList.append(songNum)
+        timeList.append(t1 - t0)
+        timeList.append(t2 - t1)
+        timeList.append(t3 - t2)
+        timeList.append(t4 - t3)
+        timeList.append(t5 - t4)
+        timeList.append(t6 - t5)
+        timeList.append(t7 - t6)
+
+        print("timeList : ")
+        print(timeList)
+        dump_str = ",".join(map(str, timeList))
+
+        resultFolderPath = "/Users/hmori/ChromagramSample3/dump"
+        if not os.path.isdir(resultFolderPath):
+            os.makedirs(resultFolderPath)
+        with open(resultFolderPath + "/dump.txt",mode='a') as f:
+            f.write("\n" + dump_str)
+
+        print("\nFinish dumping results！🥳: " + resultFolderPath+ "/" + "dump.txt")
