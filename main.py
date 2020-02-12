@@ -3,12 +3,8 @@
 """
 
      * 楽曲間類似度の計算 -> リストを作って再生
+     * log2(曲数)をコマンドライン引数で指定して解析を行う
 
-Todo:
-
-    * python main.py (オーディオファイルまでの相対パス)
-    * オーディオフォルダの中に正解アノテーションのフォルダを入れる
-    * オーディオの対応形式: mp3,wav(mp3はwavに変換)
 
 """
 
@@ -76,10 +72,11 @@ class Mix:
         self.play()
 
     def MIX(self):
-        self.silenceDuration = 0
+        self.silenceDuration = self.songDict[self.playList[0]].BPM.beats[15] + dub.AudioSegment.from_wav(self.playList[-1]).duration_seconds - self.songDict[self.playList[-1]].BPM.beats[-1]
         for song in self.playList:
             self.silenceDuration += self.songDict[song].BPM.beats[-1]
-        self.mixDown = dub.AudioSegment.silent(duration=self.silenceDuration * 1000)
+            self.silenceDuration -= self.songDict[song].BPM.beats[15]
+        self.mixDown = dub.AudioSegment.silent(duration=(self.silenceDuration + 1) * 1000)
         # 拍位置を合わせて楽曲をオーバーレイする
         self.startPosition = 0 # 曲の再生開始位置[sec]
         self.prevSongEndBeatPosition = 0 # 曲の終了拍位置[sec]
@@ -102,15 +99,16 @@ class Mix:
             self.mixDown = self.mixDown.overlay(self.song_as, position=self.startPosition*1000, loop=False, times=1, gain_during_overlay=0)
             self.startPositionDict[song] = self.startPosition
             self.prevSongEndBeatPosition = self.startPosition + self.songDict[song].BPM.beats[-1]
-        else:
-            # ミックスを書き出す
-            print("\nExporting Mix...")
-            chunks = split_on_silence(self.mixDown, min_silence_len=3000, silence_thresh=-40, keep_silence=1000)
-            self._exPath = "/Users/hmori/ChromagramSample3/MixDown"
-            if not os.path.isdir(self._exPath):
-                os.makedirs(self._exPath)
-            chunks[0].export(self._exPath + "/" + "MixDown😈.mp3", format="mp3")
-            print("\nSuccessful export!🎉🍺 : " + self._exPath + "/" + "MixDown😈.mp3")
+        return
+
+    def export(self):
+        #chunks = split_on_silence(self.mixDown, min_silence_len=3000, silence_thresh=-40, keep_silence=1000)
+        self._exPath = "/Users/hmori/ChromagramSample3/MixDown"
+        if not os.path.isdir(self._exPath):
+            os.makedirs(self._exPath)
+        self.mixDown.export(self._exPath + "/" + "MixDown😈.mp3", format="mp3")
+        #chunks[0].export(self._exPath + "/" + "MixDown😈.mp3", format="mp3")
+        print("\nSuccessful export!🎉🍺 : " + self._exPath + "/" + "MixDown😈.mp3")
         return
 
 class Analyse:
@@ -320,10 +318,15 @@ class BPM_n_Key(NamedTuple):
     Key: str
 
 print("\n\nConversioning to wav file...")
+
 # 曲数(指数が実行時パラメータ)
 songNum = 2 ** int(sys.argv[1])
+
 # make wav file directory
 wavAudioPath = "/Users/hmori/ChromagramSample3/waves"
+
+import time
+t0 = time.time()
 
 # instantiation analyser
 analyser = Analyse()
@@ -332,27 +335,70 @@ analyser = Analyse()
 print("\nAnalyzing BPM...")
 bpm_list = analyser.analyse_bpm()
 
+t1 = time.time()
+
 # key analyse
 print("\nAnalyzing Key...")
 key_list = analyser.analyse_key()
+
+t2 = time.time()
 
 # song_dict: [ファイル名 - ((BPM,beats),Key)]の順序付き辞書
 song_dict = OrderedDict()
 for k, tp in bpm_list.items():
     song_dict[k] = BPM_n_Key(tp, key_list[k])
 
+t3 = time.time()
+
 # 楽曲間類似度のマップを作成
 print("\nAnalyzing music between similarity...")
 Map = Map(song_dict, (1,1))
+
+t4 = time.time()
 
 # 曲順のリストを作成
 print("\nDetermining playback order...")
 play_list = Map.play_list()
 print("曲数 : " + str(len(play_list)))
 
+t5 = time.time()
+
 # instantiation player
 mixer = Mix(song_dict,play_list)
-
 # MIXを作成
 print("\nCreating Mix...")
 mixer.MIX()
+
+t6 = time.time()
+
+# MIXをエクスポート
+print("\nExporting Mix...")
+mixer.export()
+
+t7 = time.time()
+
+# 最終的に出力するリスト
+# [指数][曲数][BPM解析にかかった時間][キー解析にかかった時間][songDict作成にかかった時間][マップ作成にかかった時間]
+# [プレイリスト生成にかかった時間][ミックスの生成にかかった時間][ミックスの書き出しにかかった時間]
+timeList = []
+timeList.append(sys.argv[1])
+timeList.append(songNum)
+timeList.append(t1 - t0)
+timeList.append(t2 - t1)
+timeList.append(t3 - t2)
+timeList.append(t4 - t3)
+timeList.append(t5 - t4)
+timeList.append(t6 - t5)
+timeList.append(t7 - t6)
+
+print("timeList : ")
+print(timeList)
+dump_str = ",".join(map(str, timeList))
+
+resultFolderPath = "/Users/hmori/ChromagramSample3/dump"
+if not os.path.isdir(resultFolderPath):
+    os.makedirs(resultFolderPath)
+with open(resultFolderPath + "/dump.txt",mode='a') as f:
+    f.write("\n" + dump_str)
+
+print("\nFinish dumping results！🥳: " + resultFolderPath+ "/" + "dump.txt")
